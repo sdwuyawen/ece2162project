@@ -11,7 +11,7 @@ import array
 
 def whoami():
     import sys
-    return sys.getframe(1).f_code.co_name
+    return sys._getframe(1).f_code.co_name
 
 
 class FunctionUnitSetting:
@@ -136,14 +136,22 @@ class Adder:
 
 
 class ARF:
-    def __init__(self):
+    def __init__(self, int_val, float_val):
         self.reg_int = array.array('L') # unsigned long
         for i in range(32):
-            self.reg_int.append(0)
+            self.reg_int.append(int_val[i])
+        print("ARF: int val:", self.reg_int)
 
         self.reg_float = array.array('d') # double
         for i in range(32):
-            self.reg_float.append(0)
+            self.reg_float.append(float_val[i])
+        print("ARF: float val:", self.reg_float)
+
+
+class MEM:
+    def __init__(self, values):
+        self.value = values
+        print("MEM: ", self.value)
 
 
 class ROB:
@@ -156,15 +164,17 @@ class ROB:
 
 
 class Processor(object):
-    def __init__(self):
+    def __init__(self, num_rob, num_cdb, reg_int, reg_float, mem_val):
+        # TODO: process CDB
         self.cycle = -10  # current cycle
-        self.ROB = [ROB() for i in range(1000)]  # set 1000 ROB entries
-        # print(self.ROB.__len__())
-        self.ARF = ARF()
+        self.ROB = [ROB() for i in range(num_rob)]  # set 1000 ROB entries
+        print(self.ROB.__len__())
+        self.ARF = ARF(reg_int, reg_float)
         self.RAT = array.array('I')  # unsigned int
         # self.RAT.append(1)
         # print(self.RAT[0])
         # print(self.RAT.__len__())
+        self.MEM = MEM(mem_val)
 
         # read processor configuration
         self.config = ProcessorConfig()

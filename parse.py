@@ -57,7 +57,18 @@ from architecture import Processor
 
 def main():
     # init_adder(proc_config.adder)
-    processor = Processor()
+    reg_int_val = []
+    reg_float_val = []
+    for i in range(32):     # 0-31
+        reg_int_val.append(i)
+        reg_float_val.append(i)
+    # print(init_val)
+
+    mem_val = []
+    for i in range(64):     # 0-63
+        mem_val.append(0)
+
+    processor = Processor(128, -1, reg_int_val, reg_float_val, mem_val)
     processor.do_adder()
 
 
