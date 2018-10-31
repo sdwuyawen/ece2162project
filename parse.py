@@ -1,6 +1,7 @@
 # from architecture import init_adder
 from architecture import Processor
 from Parse_Config import Config
+from Parse_Inst import *
 
 # file = open("testfile.txt", "w")
 # file.write("Hello World")
@@ -76,10 +77,21 @@ def main():
     # for i in range(64):     # 0-63
        # mem_val.append(0)
     Config.Read_Config(num_ROB,num_CDB,reg_int_val,reg_float_val,mem_val)
-    print(reg_float_val)
+    # print(reg_float_val)
 
     processor = Processor(128, -1, reg_int_val, reg_float_val, mem_val)
-    processor.do_adder()
+    # processor.do_adder()
+
+    inst = Instruction(0, 1, 2, 3)
+    processor.issue(inst)
+
+    processor.clock()
+    processor.exec()
+
+    processor.clock()
+    processor.exec()
+
+
 
 
 if __name__ == '__main__':

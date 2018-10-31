@@ -3,6 +3,8 @@
 
 import array
 
+from Parse_Inst import *
+
 
 # def whoami():
 #     import inspect
@@ -117,6 +119,7 @@ class Adder:
         print(self.config.name, self.config.rs_number, self.config.ex_cycles, self.config.mem_cycles, self.config.fu_number)
 
     def operation(self, current_cycle):
+        print(whoami())
         print("processor cycle: ", current_cycle)
         # for i in range(len(self.config.rs_number)):
         for rs in self.rs:
@@ -158,19 +161,26 @@ class ROB:
     def __init__(self):
         # print(whoami())
         self.idle = 0
-        self.index = 0
+        # self.index = 0
         self.reg_number = 0
+        self.reg_value = 0
         self.value_ready = False
+
+# class Issue:
+#     def __init__(self, processor):
 
 
 class Processor(object):
     def __init__(self, num_rob, num_cdb, reg_int, reg_float, mem_val):
         # TODO: process CDB
-        self.cycle = -10  # current cycle
+        self.cycle = 100  # current cycle
+
         self.ROB = [ROB() for i in range(num_rob)]  # set 1000 ROB entries
         print(self.ROB.__len__())
         self.ARF = ARF(reg_int, reg_float)
-        self.RAT = array.array('I')  # unsigned int
+        self.RAT = array.array('i')  # unsigned int
+        for i in range(64):
+            self.RAT.append(-1)
         # self.RAT.append(1)
         # print(self.RAT[0])
         # print(self.RAT.__len__())
@@ -186,11 +196,42 @@ class Processor(object):
         self.adder.print_config()
         # self.adder.operation(self.cycle)
 
+    def clock(self):
+        self.cycle += 1
+        print("cycle changing to: ", self.cycle)
+
     def do_adder(self):
         print(whoami())
         # print(__name__)
         self.adder.operation(self.cycle)
 
+    def issue(self, inst):
+        print(whoami())
+        # TODO: Circular buffer for ROB
+        self.ROB[0].idle = 0
+        # self.ROB[0].index = 0
+        self.ROB[0].reg_number = inst.dest
+        self.ROB[0].reg_value = 0
+        # TODO: Check dependency
+        self.ROB[0].value_ready = False
+        print("ROB[0]:", self.ROB[0].idle, self.ROB[0].reg_number, self.ROB[0].reg_value, self.ROB[0].value_ready)
+
+        # TODO: RAT entry as ROB index
+        self.RAT[inst.dest] = 0
+
+        # TODO: Chech if rs is full
+        self.adder.rs[0].in_use = True
+        self.adder.rs[0].start_cycle = self.cycle + 1
+        # self.adder.rs[0].finish_cycle = self.adder
+        self.adder.rs[0].src_value[0] = inst.source_0
+        self.adder.rs[0].src_value[1] = inst.source_1
+        self.adder.rs[0].src_ready = [True, True]
+        rs_temp = self.adder.rs[0]
+        print("adder.rs[0]:", rs_temp.src_value, rs_temp.in_use, rs_temp.instruction_type, rs_temp.dest_addr, rs_temp.dest_value,
+              rs_temp.src_addr, rs_temp.src_ready, rs_temp.src_value, rs_temp.start_cycle, rs_temp.finish_cycle)
+
+    def exec(self):
+        self.adder.operation(self.cycle)
 
 # def init_adder(config):
 #
