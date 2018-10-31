@@ -1,5 +1,6 @@
 # from architecture import init_adder
 from architecture import Processor
+from Parse_Config import Config
 
 # file = open("testfile.txt", "w")
 # file.write("Hello World")
@@ -57,16 +58,25 @@ from architecture import Processor
 
 def main():
     # init_adder(proc_config.adder)
-    reg_int_val = []
-    reg_float_val = []
-    for i in range(32):     # 0-31
-        reg_int_val.append(i)
-        reg_float_val.append(i)
+    num_ROB=0
+    num_CDB=0
+	
+    # reg_int_val = []
+    # reg_float_val = []
+    # for i in range(32):     # 0-31
+       # reg_int_val.append(i)
+       # reg_float_val.append(i)
     # print(init_val)
+	
+    reg_int_val = [0]*32
+    reg_float_val = [0]*32
 
-    mem_val = []
-    for i in range(64):     # 0-63
-        mem_val.append(0)
+    # mem_val = []
+    mem_val = [0]*64
+    # for i in range(64):     # 0-63
+       # mem_val.append(0)
+    Config.Read_Config(num_ROB,num_CDB,reg_int_val,reg_float_val,mem_val)
+    print(reg_float_val)
 
     processor = Processor(128, -1, reg_int_val, reg_float_val, mem_val)
     processor.do_adder()
