@@ -122,23 +122,24 @@ class Adder:
     def operation(self, current_cycle):
         print(whoami())
         print("processor cycle: ", current_cycle)
-        # for i in range(len(self.config.rs_number)):
-        for rs in self.rs:
-            if rs.in_use == True:
-                if rs.src_ready == [True, True]:    # start an addition operation
-                    self.busy = True
-                    rs.src_ready = [False, False]
-                    rs.start_cycle = current_cycle
-                    rs.finish_cycle = current_cycle + self.config.ex_cycles
-                    rs.dest_value = rs.src_value[0] + rs.src_value[1]
-                    print("adder:")
-                    print("start cycle:", rs.start_cycle)
-                    print("finish cycle:", rs.finish_cycle)
-                elif rs.finish_cycle == current_cycle: # exactly the cycle to write back
-                    self.busy = False
-                    print("adder:")
-                    print("WBing in cycle: ", current_cycle)
-                    rs.in_use = False
+        if self.busy == False:
+            # for i in range(len(self.config.rs_number)):
+            for rs in self.rs:
+                if rs.in_use == True:
+                    if rs.src_ready == [True, True]:    # start an addition operation
+                        self.busy = True
+                        rs.src_ready = [False, False]
+                        self.start_cycle = current_cycle
+                        self.finish_cycle = current_cycle + self.config.ex_cycles
+                        rs.dest_value = rs.src_value[0] + rs.src_value[1]
+                        print("adder:")
+                        print("start cycle:", rs.start_cycle)
+                        print("finish cycle:", rs.finish_cycle)
+                    elif rs.finish_cycle == current_cycle: # exactly the cycle to write back
+                        self.busy = False
+                        print("adder:")
+                        print("WBing in cycle: ", current_cycle)
+                        rs.in_use = False
 
 
 class ARF:
@@ -163,11 +164,20 @@ class MEM:
 class ROB:
     def __init__(self):
         # print(whoami())
-        self.idle = 0
+        self.idle = True
         # self.index = 0
-        self.reg_number = 0
-        self.reg_value = 0
+        self.reg_number = -1
+        self.reg_value = -1
         self.value_ready = False
+        # TODO: = WB + 1
+        self.value_rdy2commit_cycle = -1
+
+    def clear(self):
+        self.idle = True
+        self.reg_number = -1
+        self.reg_value = -1
+        self.value_ready = False
+        self.value_rdy2commit_cycle = -1
 
 # class Issue:
 #     def __init__(self, processor):

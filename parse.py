@@ -86,6 +86,7 @@ def main():
     processor.issue(inst)
 
     processor.clock()
+
     processor.exec()
 
     processor.clock()
