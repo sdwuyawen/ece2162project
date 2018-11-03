@@ -11,6 +11,11 @@ from Parse_Inst import *
 #     frame = inspect.currentframe()
 #     return inspect.getframeinfo(frame).function
 
+# Constants
+
+EXEC = 0
+WRITE_BACK = 1
+
 def whoami():
     import sys
     return sys._getframe(1).f_code.co_name
@@ -93,6 +98,7 @@ class ProcessorConfig:
 
 class ReservationStation:
     def __init__(self):
+        self.index = 0
         self.in_use = False
         self.instruction_type = -1
         self.dest_addr = -1
@@ -100,8 +106,10 @@ class ReservationStation:
         self.src_addr = [-1, -1]
         self.src_ready = [False, False]
         self.src_value = [-1, -1]
-        self.start_cycle = -1
-        self.finish_cycle = -1
+
+    def clear(self):
+        self.__init__()
+        print(whoami())
 
 
 class Adder:
@@ -111,35 +119,89 @@ class Adder:
         print("instantiate adder")
         self.config = adder_config
         self.rs = [ReservationStation() for i in range(self.config.rs_number)]
+        # for i in range(0, 3):
+        # for i, rs in enumerate(self.rs):
+        #     self.rs.index = i
         print("rs number", self.rs.__len__())
         self.busy = False
+        # self.wbing_value = -1
+        self.wbing_cycle = -1
+        self.active_rs_num = -1
+        self.start_cycle = -1
+        self.finish_cycle = -1
 
     def print_config(self):
         print("adder config:")
         print("# of rs /", "Cycles in EX /", "Cycles in Mem /", "# of FUs /")
         print(self.config.name, self.config.rs_number, self.config.ex_cycles, self.config.mem_cycles, self.config.fu_number)
 
-    def operation(self, current_cycle):
-        print(whoami())
-        print("processor cycle: ", current_cycle)
-        if self.busy == False:
-            # for i in range(len(self.config.rs_number)):
-            for rs in self.rs:
-                if rs.in_use == True:
-                    if rs.src_ready == [True, True]:    # start an addition operation
-                        self.busy = True
-                        rs.src_ready = [False, False]
-                        self.start_cycle = current_cycle
-                        self.finish_cycle = current_cycle + self.config.ex_cycles
-                        rs.dest_value = rs.src_value[0] + rs.src_value[1]
-                        print("adder:")
-                        print("start cycle:", rs.start_cycle)
-                        print("finish cycle:", rs.finish_cycle)
-                    elif rs.finish_cycle == current_cycle: # exactly the cycle to write back
-                        self.busy = False
-                        print("adder:")
-                        print("WBing in cycle: ", current_cycle)
-                        rs.in_use = False
+    def operation(self, current_cycle, operation, processor):
+        # print(whoami())
+        print("adder operation in cycle:", current_cycle)
+        # print("processor cycle: ", current_cycle)
+        if operation == EXEC:
+            print("Adder EXEC:")
+            if self.busy == False:
+                print(" Adder got:")
+                # for i in range(len(self.config.rs_number)):
+                for i, rs in enumerate(self.rs):
+                    if self.rs[i].in_use == True:
+                        if self.rs[i].src_ready == [True, True]:    # start an addition operation
+                            self.busy = True
+                            print("     Adder occupied:")
+                            self.rs[i].src_ready = [False, False]
+                            self.start_cycle = current_cycle
+                            self.finish_cycle = current_cycle + self.config.ex_cycles
+                            self.active_rs_num = self.rs[i].index
+                            print("active_rs_num = ", self.active_rs_num)
+                            self.rs[i].dest_value = self.rs[i].src_value[0] + self.rs[i].src_value[1]
+                            self.wbing_cycle = current_cycle + 1
+                            print("start cycle:", self.start_cycle)
+                            print("finish cycle:", self.finish_cycle)
+
+            # elif self.busy == True:
+                # print("Adder busy:")
+                # if self.finish_cycle == current_cycle:  # exactly the cycle to write back
+                    # self.busy = False
+                    # print("adder:")
+                    # print("WBing in cycle: ", current_cycle)
+                    # self.rs[self.active_rs_num].in_use = False
+                    # self.active_rs_num = -1
+                    # self.wbing_cycle = current_cycle + 1
+                    # self.wbing_value = self.rs[self.active_rs_num].dest_value
+
+        elif operation == WRITE_BACK:
+            print("Adder WB:")
+            if self.busy == True:
+                print(" Adder.busy:")
+                if self.wbing_cycle == current_cycle:
+                    print("     WB cycle:")
+                    self.busy = False
+
+                    # update corresponding ROB entry
+                    processor.ROB[self.rs[self.active_rs_num].dest_addr].reg_value = self.rs[self.active_rs_num].dest_value
+                    processor.ROB[self.rs[self.active_rs_num].dest_addr].value_ready = True
+                    # TODO: = WB + 1
+                    processor.ROB[self.rs[self.active_rs_num].dest_addr].value_rdy2commit_cycle = current_cycle + 1
+                    print("ROB", self.active_rs_num, "updated to:", processor.ROB[self.rs[self.active_rs_num].dest_addr].reg_value,
+                          processor.ROB[self.rs[self.active_rs_num].dest_addr].value_ready,
+                          processor.ROB[self.rs[self.active_rs_num].dest_addr].value_rdy2commit_cycle)
+
+                    # update all the rs that pending this value
+                    for i, rs in enumerate(self.rs):
+                        if self.rs[i].in_use == True:
+                            for j in [0, 1]:
+                                if self.rs[i].src_ready[j] == False:
+                                    if self.rs[i].src_addr[j] == self.rs[self.active_rs_num].dest_addr:
+                                        self.rs[i].src_ready[j] = True
+                                        self.rs[i].src_addr[j] = -1
+                                        self.rs[i].src_value[j] = self.rs[self.active_rs_num].dest_value
+
+                    # release current RS entry
+                    # self.rs[self.active_rs_num].in_use = False
+                    self.rs[self.active_rs_num].clear()
+                    print("rs[", self.active_rs_num, "] released")
+        # TODO WB
 
 
 class ARF:
@@ -226,7 +288,37 @@ class Processor(object):
     def do_adder(self):
         print(whoami())
         # print(__name__)
-        self.adder.operation(self.cycle)
+        self.adder.operation(self.cycle, EXEC, self)
+
+
+    #     # TODO: Check what FU (adder or multiplier) the following inst needs
+    #     # TODO: Check if both RS (for this instruction) and ROB have empty entries. If so, issue it. Otherwise, skip issue in this cycle
+    #     # TODO: Circular buffer for ROB. Use head and tail to indicate the start and end of the ROB queue
+    #     # TODO: Check RAT to find out if the dependent registers are in ARF or ROB. Fill the RS with value or ROB entry
+    #     self.ROB[0].idle = 0
+    #     # self.ROB[0].index = 0
+    #     self.ROB[0].reg_number = inst.dest
+    #     self.ROB[0].reg_value = 0
+    #     # TODO: Check data dependency
+    #     self.ROB[0].value_ready = False
+    #     print("ROB[0]:", self.ROB[0].idle, self.ROB[0].reg_number, self.ROB[0].reg_value, self.ROB[0].value_ready)
+    #
+    #     # TODO: RAT entry as ROB index
+    #     self.RAT[inst.dest] = 0
+    #
+    #     # TODO: Check if rs is full
+    #     self.adder.rs[0].in_use = True
+    #     self.adder.rs[0].start_cycle = self.cycle + 1
+    #     # self.adder.rs[0].finish_cycle = self.adder
+    #     self.adder.rs[0].src_value[0] = inst.source_0
+    #     self.adder.rs[0].src_value[1] = inst.source_1
+    #     self.adder.rs[0].src_ready = [True, True]
+    #     rs_temp = self.adder.rs[0]
+    #     print("adder.rs[0]:", rs_temp.src_value, rs_temp.in_use, rs_temp.instruction_type, rs_temp.dest_addr, rs_temp.dest_value,
+    #           rs_temp.src_addr, rs_temp.src_ready, rs_temp.src_value)
+    #
+    # def execs(self):
+    #     self.adder.operation(self.cycle, EXEC, self)
 
     def issue(self, inst):
         print(whoami())
@@ -347,8 +439,8 @@ class Processor(object):
         # print("adder.rs[0]:", rs_temp.src_value, rs_temp.in_use, rs_temp.instruction_type, rs_temp.dest_addr, rs_temp.dest_value,
         #       rs_temp.src_addr, rs_temp.src_ready, rs_temp.src_value, rs_temp.start_cycle, rs_temp.finish_cycle)
 
-    def exec(self):
-        self.adder.operation(self.cycle)
+    def write_back(self):
+        self.adder.operation(self.cycle, WRITE_BACK, self)
 
 # def init_adder(config):
 #
