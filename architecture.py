@@ -144,6 +144,7 @@ class Adder:
                     if self.rs[i].in_use == True:
                         if self.rs[i].src_ready == [True, True]:    # start an addition operation
                             self.busy = True
+                            print("     Adder occupied:")
                             self.rs[i].src_ready = [False, False]
                             self.start_cycle = current_cycle
                             self.finish_cycle = current_cycle + self.config.ex_cycles
