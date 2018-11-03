@@ -192,20 +192,27 @@ class Processor(object):
         print(self.ROB.__len__())
         self.ROB_header = 0
         self.ROB_tail = 0
+        self.ROB_num = num_rob
 
         self.ARF = ARF(reg_int, reg_float)
         self.RAT = array.array('i')  # unsigned int
         for i in range(64):
-            self.RAT.append(-1)
+            self.RAT.append(i)
         # self.RAT.append(1)
         # print(self.RAT[0])
         # print(self.RAT.__len__())
         self.MEM = MEM(mem_val)
 
+
+
         # read processor configuration
         self.config = ProcessorConfig()
         self.config.read_config()
         self.config.print_config()
+
+        self.RS_Integer = [ReservationStation() for i in range(self.config.adder.rs_number)]
+
+
 
         # init adder
         self.adder = Adder(self.config.adder)
@@ -223,31 +230,122 @@ class Processor(object):
 
     def issue(self, inst):
         print(whoami())
-        # TODO: Check what FU (adder or multiplier) the following inst needs
-        # TODO: Check if both RS (for this instruction) and ROB have empty entries. If so, issue it. Otherwise, skip issue in this cycle
-        # TODO: Circular buffer for ROB. Use head and tail to indicate the start and end of the ROB queue
-        # TODO: Check RAT to find out if the dependent registers are in ARF or ROB. Fill the RS with value or ROB entry
-        self.ROB[0].idle = 0
-        # self.ROB[0].index = 0
-        self.ROB[0].reg_number = inst.dest
-        self.ROB[0].reg_value = 0
-        # TODO: Check data dependency
-        self.ROB[0].value_ready = False
-        print("ROB[0]:", self.ROB[0].idle, self.ROB[0].reg_number, self.ROB[0].reg_value, self.ROB[0].value_ready)
+        # 1. TODO: Check what FU (adder or multiplier) the following inst needs
+        # 3. TODO: Circular buffer for ROB. Use head and tail to indicate the start and end of the ROB queue
+        # 4. TODO: Check RAT to find out if the dependent registers are in ARF or ROB. Fill the RS with value or ROB entry
 
-        # TODO: RAT entry as ROB index
-        self.RAT[inst.dest] = 0
 
-        # TODO: Check if rs is full
-        self.adder.rs[0].in_use = True
-        self.adder.rs[0].start_cycle = self.cycle + 1
-        # self.adder.rs[0].finish_cycle = self.adder
-        self.adder.rs[0].src_value[0] = inst.source_0
-        self.adder.rs[0].src_value[1] = inst.source_1
-        self.adder.rs[0].src_ready = [True, True]
-        rs_temp = self.adder.rs[0]
-        print("adder.rs[0]:", rs_temp.src_value, rs_temp.in_use, rs_temp.instruction_type, rs_temp.dest_addr, rs_temp.dest_value,
-              rs_temp.src_addr, rs_temp.src_ready, rs_temp.src_value, rs_temp.start_cycle, rs_temp.finish_cycle)
+        flag = False
+        ROB_no = -1
+        RS_no = -1
+
+        # 2. TODO: Check if both RS (for this instruction) and ROB have empty entries. If so, issue it. Otherwise, skip issue in this cycle
+
+        # 2.1 Check if the ROB has empty entry, if it is, add the inst
+        for i in range(self.ROB_header, self.ROB_header+self.ROB_num):
+            rob_entry_no = i % self.ROB_num
+            if self.ROB[rob_entry_no].idle == True:
+
+
+                self.ROB_header = (self.ROB_header+1) % self.ROB_num
+
+                ROB_no = rob_entry_no
+                flag = True
+                break
+
+        if flag == False:
+            return
+
+
+
+
+
+
+        # 2.3 Check if RS has empty entry and update RS with instruction
+        # Right now, this function has not decided which RS to be put
+
+        flag = False
+
+        print("RS number is",len(self.RS_Integer))
+
+        for i in range(len(self.RS_Integer)):
+            if self.RS_Integer[i].in_use == False:
+
+                RS_no = i
+
+                # 2.1 Update ROB
+                self.ROB[rob_entry_no].reg_number = inst.dest
+                self.ROB[rob_entry_no].idle = False
+
+
+                # 2.2 Update RAT
+                self.RAT[inst.dest] = 64 + ROB_no
+
+
+                # 2.3 Update RS
+                self.RS_Integer[i].in_use = True
+
+                self.RS_Integer[i].instruction_type = inst.inst
+
+                self.RS_Integer[i].dest_addr = self.RAT[inst.dest] % 64
+                self.RS_Integer[i].dest_value = -1
+
+                src_0 = self.RAT[inst.source_0]
+                print("src_0 is", src_0)
+                src_1 = self.RAT[inst.source_1]
+                print("src_1 is", src_1)
+
+                self.RS_Integer[i].src_addr = [src_0, src_1]
+                self.RS_Integer[i].start_cycle = -1
+                self.RS_Integer[i].finish_cycle = -1
+                # If both source is in ARF
+                if (src_0 < 64 and src_1 < 64):
+                    self.RS_Integer[i].src_ready = [True, True]
+                    self.RS_Integer[i].src_value = [self.ARF.reg_int[src_0], self.ARF.reg_int[src_1]]
+
+
+                # if source 0 is from ROB, source 1 is from ARF
+                if (src_0 >= 64 and src_1 < 64):
+                    self.RS_Integer[i].src_ready = [False, True]
+                    self.RS_Integer[i].src_value = [-1, self.ARF.reg_int[src_1]]
+
+
+                # if source 0 is from ARF, source 1 is from ROB
+                if (src_0 < 64 and src_1 >= 64):
+                    self.RS_Integer[i].src_ready = [True, False]
+                    self.RS_Integer[i].src_value = [self.ARF.reg_int[src_0], -1]
+
+                # if both are from ROB
+                if (src_0 >= 64 and src_1 >= 64):
+                    self.RS_Integer[i].src_ready = [False, False]
+                    self.RS_Integer[i].src_value = [-1, -1]
+
+                flag = True
+                break
+
+        if flag == False:
+            return
+
+        print("ROB[",ROB_no,"]:", self.ROB[ROB_no].idle, self.ROB[ROB_no].reg_number, self.ROB[ROB_no].reg_value,
+              self.ROB[ROB_no].value_ready)
+        print("RS[",RS_no,"]:", self.RS_Integer[RS_no].in_use, self.RS_Integer[RS_no].dest_addr, self.RS_Integer[RS_no].dest_value, self.RS_Integer[RS_no].src_addr,
+            self.RS_Integer[RS_no].src_ready, self.RS_Integer[RS_no].src_value)
+
+        # print("ROB[0]:", self.ROB[0].idle, self.ROB[0].reg_number, self.ROB[0].reg_value, self.ROB[0].value_ready)
+
+        # # 7. TODO: RAT entry as ROB index
+        # self.RAT[inst.dest] = 0
+        #
+        # # 8. TODO: Check if rs is full
+        # self.adder.rs[0].in_use = True
+        # self.adder.rs[0].start_cycle = self.cycle + 1
+        # # self.adder.rs[0].finish_cycle = self.adder
+        # self.adder.rs[0].src_value[0] = inst.source_0
+        # self.adder.rs[0].src_value[1] = inst.source_1
+        # self.adder.rs[0].src_ready = [True, True]
+        # rs_temp = self.adder.rs[0]
+        # print("adder.rs[0]:", rs_temp.src_value, rs_temp.in_use, rs_temp.instruction_type, rs_temp.dest_addr, rs_temp.dest_value,
+        #       rs_temp.src_addr, rs_temp.src_ready, rs_temp.src_value, rs_temp.start_cycle, rs_temp.finish_cycle)
 
     def exec(self):
         self.adder.operation(self.cycle)

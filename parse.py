@@ -82,7 +82,7 @@ def main():
     processor = Processor(128, -1, reg_int_val, reg_float_val, mem_val)
     # processor.do_adder()
 
-    inst = Instruction(0, 1, 2, 3)
+    inst = Instruction(6, 5, 1, 2)
     processor.issue(inst)
 
     processor.clock()
