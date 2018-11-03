@@ -112,6 +112,7 @@ class Adder:
         self.config = adder_config
         self.rs = [ReservationStation() for i in range(self.config.rs_number)]
         print("rs number", self.rs.__len__())
+        self.busy = False
 
     def print_config(self):
         print("adder config:")
@@ -125,6 +126,7 @@ class Adder:
         for rs in self.rs:
             if rs.in_use == True:
                 if rs.src_ready == [True, True]:    # start an addition operation
+                    self.busy = True
                     rs.src_ready = [False, False]
                     rs.start_cycle = current_cycle
                     rs.finish_cycle = current_cycle + self.config.ex_cycles
@@ -133,6 +135,7 @@ class Adder:
                     print("start cycle:", rs.start_cycle)
                     print("finish cycle:", rs.finish_cycle)
                 elif rs.finish_cycle == current_cycle: # exactly the cycle to write back
+                    self.busy = False
                     print("adder:")
                     print("WBing in cycle: ", current_cycle)
                     rs.in_use = False
@@ -177,6 +180,9 @@ class Processor(object):
 
         self.ROB = [ROB() for i in range(num_rob)]  # set 1000 ROB entries
         print(self.ROB.__len__())
+        self.ROB_header = 0
+        self.ROB_tail = 0
+
         self.ARF = ARF(reg_int, reg_float)
         self.RAT = array.array('i')  # unsigned int
         for i in range(64):
@@ -207,19 +213,22 @@ class Processor(object):
 
     def issue(self, inst):
         print(whoami())
-        # TODO: Circular buffer for ROB
+        # TODO: Check what FU (adder or multiplier) the following inst needs
+        # TODO: Check if both RS (for this instruction) and ROB have empty entries. If so, issue it. Otherwise, skip issue in this cycle
+        # TODO: Circular buffer for ROB. Use head and tail to indicate the start and end of the ROB queue
+        # TODO: Check RAT to find out if the dependent registers are in ARF or ROB. Fill the RS with value or ROB entry
         self.ROB[0].idle = 0
         # self.ROB[0].index = 0
         self.ROB[0].reg_number = inst.dest
         self.ROB[0].reg_value = 0
-        # TODO: Check dependency
+        # TODO: Check data dependency
         self.ROB[0].value_ready = False
         print("ROB[0]:", self.ROB[0].idle, self.ROB[0].reg_number, self.ROB[0].reg_value, self.ROB[0].value_ready)
 
         # TODO: RAT entry as ROB index
         self.RAT[inst.dest] = 0
 
-        # TODO: Chech if rs is full
+        # TODO: Check if rs is full
         self.adder.rs[0].in_use = True
         self.adder.rs[0].start_cycle = self.cycle + 1
         # self.adder.rs[0].finish_cycle = self.adder
