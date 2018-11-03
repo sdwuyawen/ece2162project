@@ -85,14 +85,18 @@ def main():
     inst = Instruction(0, 1, 2, 3)
     processor.issue(inst)
 
+    print("-----------------------------------------------------------------")
     processor.clock()
-
-    processor.exec()
+    processor.execs()
+    processor.write_back()
 
     processor.clock()
-    processor.exec()
+    processor.execs()
+    processor.write_back()
 
-
+    processor.clock()
+    processor.execs()
+    processor.write_back()
 
 
 if __name__ == '__main__':
