@@ -1,2 +1,2 @@
-Add R1, R2, R3
+Add R0, R2, R3
 Sub.d R1, R2, R3
