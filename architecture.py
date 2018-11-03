@@ -107,6 +107,10 @@ class ReservationStation:
         self.src_ready = [False, False]
         self.src_value = [-1, -1]
 
+    def clear(self):
+        self.__init__()
+        print(whoami())
+
 
 class Adder:
     # adder_rs_number = 0
@@ -194,7 +198,8 @@ class Adder:
                                         self.rs[i].src_value[j] = self.rs[self.active_rs_num].dest_value
 
                     # release current RS entry
-                    self.rs[self.active_rs_num].in_use = False
+                    # self.rs[self.active_rs_num].in_use = False
+                    self.rs[self.active_rs_num].clear()
                     print("rs[", self.active_rs_num, "] released")
         # TODO WB
 
