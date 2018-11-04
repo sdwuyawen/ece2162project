@@ -135,9 +135,10 @@ class Adder:
         print("# of rs /", "Cycles in EX /", "Cycles in Mem /", "# of FUs /")
         print(self.config.name, self.config.rs_number, self.config.ex_cycles, self.config.mem_cycles, self.config.fu_number)
 
-    def operation(self, current_cycle, operation, processor, rs):
+    def operation(self, current_cycle, operation, processor):
         # print(whoami())
         print(processor)
+        rs = processor.RS_Integer
         print("adder operation in cycle:", current_cycle)
         # print("processor cycle: ", current_cycle)
         if operation == EXEC:
@@ -158,7 +159,7 @@ class Adder:
                             self.active_rs_num = rs[i].index
                             print("active_rs_num = ", self.active_rs_num)
                             rs[i].dest_value = rs[i].src_value[0] + rs[i].src_value[1]
-                            self.wbing_cycle = self.finish_cycle + 1
+                            self.wbing_cycle = self.finish_cycle
                             print("start cycle:", self.start_cycle)
                             print("finish cycle:", self.finish_cycle)
 
@@ -184,7 +185,7 @@ class Adder:
                     # update corresponding ROB entry
                     processor.ROB[rs[self.active_rs_num].dest_addr].reg_value = rs[self.active_rs_num].dest_value
                     processor.ROB[rs[self.active_rs_num].dest_addr].value_ready = True
-                    # TODO: = WB + 1
+                    # TODO: COMMIT = WB + 1
                     processor.ROB[rs[self.active_rs_num].dest_addr].value_rdy2commit_cycle = current_cycle + 1
                     print("ROB", self.active_rs_num, "updated to:", processor.ROB[rs[self.active_rs_num].dest_addr].reg_value,
                           processor.ROB[rs[self.active_rs_num].dest_addr].value_ready,
@@ -428,12 +429,12 @@ class Processor(object):
     def write_back(self):
         print("++++++++++++++++++++++++++++++++")
         print(self)
-        self.adder.operation(self.cycle, WRITE_BACK, self, self.RS_Integer)
+        self.adder.operation(self.cycle, WRITE_BACK, self)
 
     def execs(self):
-        self.adder.operation(self.cycle, EXEC, self, self.RS_Integer)
+        self.adder.operation(self.cycle, EXEC, self)
 
-    def Commit(self):  # pc 1103
+    def commit(self):  # pc 1103
         print("Commit begin:")
         rob_H = self.ROB[self.ROB_tail]  # ROB header entry
         if rob_H.value_ready == True and self.cycle==self.ROB[self.ROB_tail].value_rdy2commit_cycle:  # ready to commit

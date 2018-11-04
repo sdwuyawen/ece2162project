@@ -90,32 +90,32 @@ def main():
     processor.clock()
     processor.execs()
     processor.write_back()
-    processor.Commit()
+    processor.commit()
 
     processor.clock()
     processor.execs()
     processor.write_back()
-    processor.Commit()
+    processor.commit()
 
     processor.clock()
     processor.execs()
     processor.write_back()
-    processor.Commit()
+    processor.commit()
 
     processor.clock()
     processor.execs()
     processor.write_back()
-    processor.Commit()
+    processor.commit()
 
     processor.clock()
     processor.execs()
     processor.write_back()
-    processor.Commit()
+    processor.commit()
 
     processor.clock()
     processor.execs()
     processor.write_back()
-    processor.Commit()
+    processor.commit()
 
 if __name__ == '__main__':
     main()
