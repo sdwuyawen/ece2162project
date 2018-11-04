@@ -1,7 +1,8 @@
 # from architecture import init_adder
-from architecture import Processor
+from architecture import *
 from Parse_Config import Config
 from Parse_Inst import *
+from Output import *
 
 # file = open("testfile.txt", "w")
 # file.write("Hello World")
@@ -61,14 +62,14 @@ def main():
     # init_adder(proc_config.adder)
     num_ROB=0
     num_CDB=0
-	
+
     # reg_int_val = []
     # reg_float_val = []
     # for i in range(32):     # 0-31
        # reg_int_val.append(i)
        # reg_float_val.append(i)
     # print(init_val)
-	
+
     reg_int_val = [0]*32
     reg_float_val = [0]*32
 
@@ -79,43 +80,60 @@ def main():
     num_ROB, num_CDB = Config.Read_Config(num_ROB, num_CDB, reg_int_val, reg_float_val, mem_val)
     # print(reg_float_val)
 
-    processor = Processor(num_ROB, -1, reg_int_val, reg_float_val, mem_val)
+    
     # processor.do_adder()
 
     # cycle: 100
-    inst = Instruction(6, 5, 1, 2)
-    processor.issue(inst)
+    inst_list, inst_num = parse_inst()
+
+    processor = Processor(num_ROB, -1, reg_int_val, reg_float_val, mem_val, inst_num)
+    
+    processor.issue(inst_list[0])
+    print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+    print(processor.instruction_final_table)
 
     print("-----------------------------------------------------------------")
     processor.clock()
     processor.execs()
     processor.write_back()
     processor.commit()
+    print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+    print(processor.instruction_final_table)
+
+    processor.clock()
+    processor.execs()
+    processor.write_back()
+    processor.commit()
+    print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+    print(processor.instruction_final_table)
+
+    processor.clock()
+    processor.execs()
+    processor.write_back()
+    processor.commit()
+    print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+    print(processor.instruction_final_table)
+
+    processor.clock()
+    processor.execs()
+    processor.write_back()
+    processor.commit()
+    print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+    print(processor.instruction_final_table)
+
+    processor.clock()
+    processor.execs()
+    processor.write_back()
+    processor.commit()
+    print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+    print(processor.instruction_final_table)
 
     processor.clock()
     processor.execs()
     processor.write_back()
     processor.commit()
 
-    processor.clock()
-    processor.execs()
-    processor.write_back()
-    processor.commit()
-
-    processor.clock()
-    processor.execs()
-    processor.write_back()
-    processor.commit()
-
-    processor.clock()
-    processor.execs()
-    processor.write_back()
-    processor.commit()
-
-    processor.clock()
-    processor.execs()
-    processor.write_back()
-    processor.commit()
+    output_txt(processor.instruction_final_table)
 
 if __name__ == '__main__':
     main()

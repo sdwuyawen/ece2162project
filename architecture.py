@@ -2,6 +2,9 @@
 # from parse import ProcessorConfig
 
 import array
+#import numpy
+
+from parse import *
 
 from Parse_Inst import *
 
@@ -15,6 +18,8 @@ from Parse_Inst import *
 
 EXEC = 0
 WRITE_BACK = 1
+
+
 
 def whoami():
     import sys
@@ -101,6 +106,7 @@ class ReservationStation:
         self.index = 0
         self.in_use = False
         self.instruction_type = -1
+        self.instruction_index = -1
         self.dest_addr = -1
         self.dest_value = -1
         self.src_addr = [-1, -1]
@@ -145,11 +151,16 @@ class Adder:
             print("Adder EXEC:")
             if self.busy == False:
                 print(" Adder got:")
+
                 # for i in range(len(self.config.rs_number)):
                 # for i, rs in enumerate(rs):
                 for i in range(len(rs)):
                     if rs[i].in_use == True:
                         if rs[i].src_ready == [True, True]:    # start an addition operation
+
+                            # Add current cycle as the execution cycle of corresponding instruction
+                            processor.instruction_final_table[rs[i].instruction_index][1] = current_cycle
+
                             self.busy = True
                             print("     Adder occupied:")
                             rs[i].src_ready = [False, False]
@@ -185,6 +196,10 @@ class Adder:
                     # update corresponding ROB entry
                     processor.ROB[rs[self.active_rs_num].dest_addr].reg_value = rs[self.active_rs_num].dest_value
                     processor.ROB[rs[self.active_rs_num].dest_addr].value_ready = True
+
+                    # Add current cycle as the wb cycle of corresponding instruction
+                    processor.instruction_final_table[processor.ROB[rs[self.active_rs_num].dest_addr].instruction_index][3] = current_cycle
+
                     # TODO: COMMIT = WB + 1
                     processor.ROB[rs[self.active_rs_num].dest_addr].value_rdy2commit_cycle = current_cycle + 1
                     print("ROB", self.active_rs_num, "updated to:", processor.ROB[rs[self.active_rs_num].dest_addr].reg_value,
@@ -238,6 +253,7 @@ class ROB:
         self.value_ready = False
         # TODO: = WB + 1
         self.value_rdy2commit_cycle = -1
+        self.instruction_index = -1
 
     def clear(self):
         self.idle = True
@@ -251,8 +267,15 @@ class ROB:
 
 
 class Processor(object):
-    def __init__(self, num_rob, num_cdb, reg_int, reg_float, mem_val):
+    def __init__(self, num_rob, num_cdb, reg_int, reg_float, mem_val, num_inst):
+
+
+
         # TODO: process CDB
+
+        # declare an final instruction table for every inst
+        self.instruction_final_table = [[-1 for j in range(5)] for i in range(num_inst)]
+
         self.cycle = 100  # current cycle
 
         self.ROB = [ROB() for i in range(num_rob)]  # set 1000 ROB entries
@@ -330,13 +353,17 @@ class Processor(object):
         # 4. TODO: Check RAT to find out if the dependent registers are in ARF or ROB. Fill the RS with value or ROB entry
 
 
+
+
+        # 2. TODO: Check if both RS (for this instruction) and ROB have empty entries. If so, issue it. Otherwise, skip issue in this cycle
+
         flag = False
         ROB_no = -1
         RS_no = -1
 
-        # 2. TODO: Check if both RS (for this instruction) and ROB have empty entries. If so, issue it. Otherwise, skip issue in this cycle
-
-        # 2.1 Check if the ROB has empty entry, if it is, add the inst
+        # 2.1 Check if the ROB has empty entry.
+        # If no, return -1
+        # If yes, go on to check RS
         for i in range(self.ROB_header, self.ROB_header+self.ROB_num):
             rob_entry_no = i % self.ROB_num
             if self.ROB[rob_entry_no].idle == True:
@@ -346,10 +373,16 @@ class Processor(object):
                 break
 
         if flag == False:
-            return
+            return -1
 
-        # 2.3 Check if RS has empty entry and update RS with instruction
-        # Right now, this function has not decided which RS to be put
+        # 2.3 Check if RS has empty entry
+        # If no, return -1
+        # If yes, update RS, ROB, RAT with instruction
+        #
+        #
+        #
+        #
+        # Note: Right now, this function has not decided which RS to be put
 
         flag = False
 
@@ -363,13 +396,19 @@ class Processor(object):
                 # 2.1 Update ROB
                 self.ROB[rob_entry_no].reg_number = inst.dest
                 self.ROB[rob_entry_no].idle = False
+                self.ROB[rob_entry_no].instruction_index = inst.index
+
+
                 # 2.2 Update RAT
                 self.RAT[inst.dest] = 64 + ROB_no
+
+
                 # 2.3 Update RS
                 self.RS_Integer[i].in_use = True
                 self.RS_Integer[i].instruction_type = inst.inst
                 self.RS_Integer[i].dest_addr = self.RAT[inst.dest] % 64
                 self.RS_Integer[i].dest_value = -1
+                self.RS_Integer[i].instruction_index = inst.index
 
                 src_0 = self.RAT[inst.source_0]
                 print("src_0 is", src_0)
@@ -379,6 +418,8 @@ class Processor(object):
                 self.RS_Integer[i].src_addr = [src_0, src_1]
                 self.RS_Integer[i].start_cycle = -1
                 self.RS_Integer[i].finish_cycle = -1
+
+
                 # If both source is in ARF
                 if (src_0 < 64 and src_1 < 64):
                     self.RS_Integer[i].src_ready = [True, True]
@@ -403,12 +444,16 @@ class Processor(object):
                 break
 
         if flag == False:
-            return
+            return -1
 
         print("ROB[",ROB_no,"]:", self.ROB[ROB_no].idle, self.ROB[ROB_no].reg_number, self.ROB[ROB_no].reg_value,
-              self.ROB[ROB_no].value_ready)
+              self.ROB[ROB_no].instruction_index)
         print("RS[",RS_no,"]:", self.RS_Integer[RS_no].in_use, self.RS_Integer[RS_no].dest_addr, self.RS_Integer[RS_no].dest_value, self.RS_Integer[RS_no].src_addr,
-            self.RS_Integer[RS_no].src_ready, self.RS_Integer[RS_no].src_value)
+            self.RS_Integer[RS_no].src_ready, self.RS_Integer[RS_no].src_value,self.RS_Integer[RS_no].instruction_index)
+        print("Current cycle is",self.cycle)
+
+        # Add a new line for final output instruction table
+        self.instruction_final_table[inst.index][0] = self.cycle
 
         # print("ROB[0]:", self.ROB[0].idle, self.ROB[0].reg_number, self.ROB[0].reg_value, self.ROB[0].value_ready)
 
@@ -438,6 +483,10 @@ class Processor(object):
         print("Commit begin:")
         rob_H = self.ROB[self.ROB_tail]  # ROB header entry
         if rob_H.value_ready == True and self.cycle==self.ROB[self.ROB_tail].value_rdy2commit_cycle:  # ready to commit
+
+            # Add current cycle as the wb cycle of corresponding instruction
+            self.instruction_final_table[rob_H.instruction_index][4] = self.cycle
+
             self.RAT[rob_H.reg_number] = rob_H.reg_number  # update RAT to the latest ARF ID
             if rob_H.reg_number > 31:
                 self.ARF.reg_float[rob_H.reg_number % 32] = rob_H.reg_value  # update ARF to the latest value in ROB
