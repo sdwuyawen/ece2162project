@@ -1,6 +1,6 @@
 import re
 class Config:
-    def Read_Config(num_ROB, num_CDB, R, F, Mem):
+    def Read_Config(num_ROB,num_CDB, R, F, Mem):
         #read file
         fc=open("config_Space.txt", "r")
         lines=fc.readlines()
@@ -41,3 +41,4 @@ class Config:
         print("R=",R)
         print("F=",F)
         print("Mem=",Mem)
+        return num_ROB,num_CDB
