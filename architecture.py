@@ -317,8 +317,8 @@ class Processor(object):
     #     print("adder.rs[0]:", rs_temp.src_value, rs_temp.in_use, rs_temp.instruction_type, rs_temp.dest_addr, rs_temp.dest_value,
     #           rs_temp.src_addr, rs_temp.src_ready, rs_temp.src_value)
     #
-    # def execs(self):
-    #     self.adder.operation(self.cycle, EXEC, self)
+    def execs(self):
+        self.adder.operation(self.cycle, EXEC, self)
 
     def issue(self, inst):
         print(whoami())
