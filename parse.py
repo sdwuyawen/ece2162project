@@ -76,12 +76,13 @@ def main():
     mem_val = [0]*64
     # for i in range(64):     # 0-63
        # mem_val.append(0)
-    Config.Read_Config(num_ROB,num_CDB,reg_int_val,reg_float_val,mem_val)
+    num_ROB, num_CDB = Config.Read_Config(num_ROB, num_CDB, reg_int_val, reg_float_val, mem_val)
     # print(reg_float_val)
 
-    processor = Processor(128, -1, reg_int_val, reg_float_val, mem_val)
+    processor = Processor(num_ROB, -1, reg_int_val, reg_float_val, mem_val)
     # processor.do_adder()
 
+    # cycle: 100
     inst = Instruction(6, 5, 1, 2)
     processor.issue(inst)
 
@@ -89,15 +90,32 @@ def main():
     processor.clock()
     processor.execs()
     processor.write_back()
+    processor.Commit()
 
     processor.clock()
     processor.execs()
     processor.write_back()
+    processor.Commit()
 
     processor.clock()
     processor.execs()
     processor.write_back()
+    processor.Commit()
 
+    processor.clock()
+    processor.execs()
+    processor.write_back()
+    processor.Commit()
+
+    processor.clock()
+    processor.execs()
+    processor.write_back()
+    processor.Commit()
+
+    processor.clock()
+    processor.execs()
+    processor.write_back()
+    processor.Commit()
 
 if __name__ == '__main__':
     main()

@@ -118,11 +118,11 @@ class Adder:
     def __init__(self, adder_config):
         print("instantiate adder")
         self.config = adder_config
-        self.rs = [ReservationStation() for i in range(self.config.rs_number)]
+        # self.rs = [ReservationStation() for i in range(self.config.rs_number)]
         # for i in range(0, 3):
         # for i, rs in enumerate(self.rs):
         #     self.rs.index = i
-        print("rs number", self.rs.__len__())
+        # print("rs number", rs.__len__())
         self.busy = False
         # self.wbing_value = -1
         self.wbing_cycle = -1
@@ -135,8 +135,9 @@ class Adder:
         print("# of rs /", "Cycles in EX /", "Cycles in Mem /", "# of FUs /")
         print(self.config.name, self.config.rs_number, self.config.ex_cycles, self.config.mem_cycles, self.config.fu_number)
 
-    def operation(self, current_cycle, operation, processor):
+    def operation(self, current_cycle, operation, processor, rs):
         # print(whoami())
+        print(processor)
         print("adder operation in cycle:", current_cycle)
         # print("processor cycle: ", current_cycle)
         if operation == EXEC:
@@ -144,18 +145,20 @@ class Adder:
             if self.busy == False:
                 print(" Adder got:")
                 # for i in range(len(self.config.rs_number)):
-                for i, rs in enumerate(self.rs):
-                    if self.rs[i].in_use == True:
-                        if self.rs[i].src_ready == [True, True]:    # start an addition operation
+                # for i, rs in enumerate(rs):
+                for i in range(len(rs)):
+                    if rs[i].in_use == True:
+                        if rs[i].src_ready == [True, True]:    # start an addition operation
                             self.busy = True
                             print("     Adder occupied:")
-                            self.rs[i].src_ready = [False, False]
+                            rs[i].src_ready = [False, False]
                             self.start_cycle = current_cycle
+                            # print(self.config.ex_cycles)
                             self.finish_cycle = current_cycle + self.config.ex_cycles
-                            self.active_rs_num = self.rs[i].index
+                            self.active_rs_num = rs[i].index
                             print("active_rs_num = ", self.active_rs_num)
-                            self.rs[i].dest_value = self.rs[i].src_value[0] + self.rs[i].src_value[1]
-                            self.wbing_cycle = current_cycle + 1
+                            rs[i].dest_value = rs[i].src_value[0] + rs[i].src_value[1]
+                            self.wbing_cycle = self.finish_cycle + 1
                             print("start cycle:", self.start_cycle)
                             print("finish cycle:", self.finish_cycle)
 
@@ -179,27 +182,28 @@ class Adder:
                     self.busy = False
 
                     # update corresponding ROB entry
-                    processor.ROB[self.rs[self.active_rs_num].dest_addr].reg_value = self.rs[self.active_rs_num].dest_value
-                    processor.ROB[self.rs[self.active_rs_num].dest_addr].value_ready = True
+                    processor.ROB[rs[self.active_rs_num].dest_addr].reg_value = rs[self.active_rs_num].dest_value
+                    processor.ROB[rs[self.active_rs_num].dest_addr].value_ready = True
                     # TODO: = WB + 1
-                    processor.ROB[self.rs[self.active_rs_num].dest_addr].value_rdy2commit_cycle = current_cycle + 1
-                    print("ROB", self.active_rs_num, "updated to:", processor.ROB[self.rs[self.active_rs_num].dest_addr].reg_value,
-                          processor.ROB[self.rs[self.active_rs_num].dest_addr].value_ready,
-                          processor.ROB[self.rs[self.active_rs_num].dest_addr].value_rdy2commit_cycle)
+                    processor.ROB[rs[self.active_rs_num].dest_addr].value_rdy2commit_cycle = current_cycle + 1
+                    print("ROB", self.active_rs_num, "updated to:", processor.ROB[rs[self.active_rs_num].dest_addr].reg_value,
+                          processor.ROB[rs[self.active_rs_num].dest_addr].value_ready,
+                          processor.ROB[rs[self.active_rs_num].dest_addr].value_rdy2commit_cycle)
 
                     # update all the rs that pending this value
-                    for i, rs in enumerate(self.rs):
-                        if self.rs[i].in_use == True:
+                    # for i, rs in enumerate(rs):
+                    for i in range(len(rs)):
+                        if rs[i].in_use == True:
                             for j in [0, 1]:
-                                if self.rs[i].src_ready[j] == False:
-                                    if self.rs[i].src_addr[j] == self.rs[self.active_rs_num].dest_addr:
-                                        self.rs[i].src_ready[j] = True
-                                        self.rs[i].src_addr[j] = -1
-                                        self.rs[i].src_value[j] = self.rs[self.active_rs_num].dest_value
+                                if rs[i].src_ready[j] == False:
+                                    if rs[i].src_addr[j] == rs[self.active_rs_num].dest_addr:
+                                        rs[i].src_ready[j] = True
+                                        rs[i].src_addr[j] = -1
+                                        rs[i].src_value[j] = rs[self.active_rs_num].dest_value
 
                     # release current RS entry
                     # self.rs[self.active_rs_num].in_use = False
-                    self.rs[self.active_rs_num].clear()
+                    rs[self.active_rs_num].clear()
                     print("rs[", self.active_rs_num, "] released")
         # TODO WB
 
@@ -265,8 +269,6 @@ class Processor(object):
         # print(self.RAT.__len__())
         self.MEM = MEM(mem_val)
 
-
-
         # read processor configuration
         self.config = ProcessorConfig()
         self.config.read_config()
@@ -274,9 +276,9 @@ class Processor(object):
 
         self.RS_Integer = [ReservationStation() for i in range(self.config.adder.rs_number)]
 
-
-
         # init adder
+        print("----------------------------------------")
+        print(self.RS_Integer)
         self.adder = Adder(self.config.adder)
         self.adder.print_config()
         # self.adder.operation(self.cycle)
@@ -285,10 +287,10 @@ class Processor(object):
         self.cycle += 1
         print("cycle changing to: ", self.cycle)
 
-    def do_adder(self):
-        print(whoami())
-        # print(__name__)
-        self.adder.operation(self.cycle, EXEC, self)
+    # def do_adder(self):
+    #     print(whoami())
+    #     # print(__name__)
+    #     self.adder.operation(self.cycle, EXEC, self, self.RS_Integer)
 
 
     #     # TODO: Check what FU (adder or multiplier) the following inst needs
@@ -337,21 +339,13 @@ class Processor(object):
         for i in range(self.ROB_header, self.ROB_header+self.ROB_num):
             rob_entry_no = i % self.ROB_num
             if self.ROB[rob_entry_no].idle == True:
-
-
                 self.ROB_header = (self.ROB_header+1) % self.ROB_num
-
                 ROB_no = rob_entry_no
                 flag = True
                 break
 
         if flag == False:
             return
-
-
-
-
-
 
         # 2.3 Check if RS has empty entry and update RS with instruction
         # Right now, this function has not decided which RS to be put
@@ -368,17 +362,11 @@ class Processor(object):
                 # 2.1 Update ROB
                 self.ROB[rob_entry_no].reg_number = inst.dest
                 self.ROB[rob_entry_no].idle = False
-
-
                 # 2.2 Update RAT
                 self.RAT[inst.dest] = 64 + ROB_no
-
-
                 # 2.3 Update RS
                 self.RS_Integer[i].in_use = True
-
                 self.RS_Integer[i].instruction_type = inst.inst
-
                 self.RS_Integer[i].dest_addr = self.RAT[inst.dest] % 64
                 self.RS_Integer[i].dest_value = -1
 
@@ -395,12 +383,10 @@ class Processor(object):
                     self.RS_Integer[i].src_ready = [True, True]
                     self.RS_Integer[i].src_value = [self.ARF.reg_int[src_0], self.ARF.reg_int[src_1]]
 
-
                 # if source 0 is from ROB, source 1 is from ARF
                 if (src_0 >= 64 and src_1 < 64):
                     self.RS_Integer[i].src_ready = [False, True]
                     self.RS_Integer[i].src_value = [-1, self.ARF.reg_int[src_1]]
-
 
                 # if source 0 is from ARF, source 1 is from ROB
                 if (src_0 < 64 and src_1 >= 64):
@@ -440,7 +426,26 @@ class Processor(object):
         #       rs_temp.src_addr, rs_temp.src_ready, rs_temp.src_value, rs_temp.start_cycle, rs_temp.finish_cycle)
 
     def write_back(self):
-        self.adder.operation(self.cycle, WRITE_BACK, self)
+        print("++++++++++++++++++++++++++++++++")
+        print(self)
+        self.adder.operation(self.cycle, WRITE_BACK, self, self.RS_Integer)
+
+    def execs(self):
+        self.adder.operation(self.cycle, EXEC, self, self.RS_Integer)
+
+    def Commit(self):  # pc 1103
+        print("Commit begin:")
+        rob_H = self.ROB[self.ROB_tail]  # ROB header entry
+        if rob_H.value_ready == True and self.cycle==self.ROB[self.ROB_tail].value_rdy2commit_cycle:  # ready to commit
+            self.RAT[rob_H.reg_number] = rob_H.reg_number  # update RAT to the latest ARF ID
+            if rob_H.reg_number > 31:
+                self.ARF.reg_float[rob_H.reg_number % 32] = rob_H.reg_value  # update ARF to the latest value in ROB
+            else:
+                self.ARF.reg_int[rob_H.reg_number % 32] = rob_H.reg_value  # update ARF to the latest value in ROB
+            self.ROB[self.ROB_tail].clear()  # remove current ROB head entry
+            self.ROB_tail = (self.ROB_tail + 1) % 64  # update ROB header to the next one
+
+        print(self.ROB_tail)
 
 # def init_adder(config):
 #
