@@ -1,10 +1,11 @@
 class Instruction:
-    def __init__(self, inst, dest, source_0, source_1, index):
+    def __init__(self, inst, dest, source_0, source_1, index, str):
         self.inst = inst
         self.dest = dest
         self.source_0 = source_0
         self.source_1 = source_1
         self.index = index
+        self.str = str
 
 # IDEA:
 # 1. Read the instruction file
@@ -36,7 +37,7 @@ def parse_inst():
             source_operand_1 = int(y[3].split(',')[0][1:])
             print(source_operand_1)
 
-            p = Instruction(operand_construct, dest_operand_1, source_operand_0, source_operand_1,i)
+            p = Instruction(operand_construct, dest_operand_1, source_operand_0, source_operand_1, i, x)
             print ("p's inst is",p.inst,"index is",p.index)
 
             inst_list.append(p)

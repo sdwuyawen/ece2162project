@@ -112,6 +112,7 @@ class ReservationStation:
         self.src_addr = [-1, -1]
         self.src_ready = [False, False]
         self.src_value = [-1, -1]
+        self.rdy2exe_cycle = -1
 
     def clear(self):
         self.__init__()
@@ -156,8 +157,7 @@ class Adder:
                 # for i, rs in enumerate(rs):
                 for i in range(len(rs)):
                     if rs[i].in_use == True:
-                        if rs[i].src_ready == [True, True]:    # start an addition operation
-
+                        if rs[i].src_ready == [True, True] and current_cycle >= rs[i].rdy2exe_cycle:    # start an addition operation
                             # Add current cycle as the execution cycle of corresponding instruction
                             processor.instruction_final_table[rs[i].instruction_index][1] = current_cycle
 
@@ -194,10 +194,11 @@ class Adder:
                     self.busy = False
 
                     # update corresponding ROB entry
+                    print("         update ROB entry ", rs[self.active_rs_num].dest_addr)
                     processor.ROB[rs[self.active_rs_num].dest_addr].reg_value = rs[self.active_rs_num].dest_value
                     processor.ROB[rs[self.active_rs_num].dest_addr].value_ready = True
 
-                    # Add current cycle as the wb cycle of corresponding instruction
+                    # Add current cycle as the WB cycle of corresponding instruction
                     processor.instruction_final_table[processor.ROB[rs[self.active_rs_num].dest_addr].instruction_index][3] = current_cycle
 
                     # TODO: COMMIT = WB + 1
@@ -221,6 +222,7 @@ class Adder:
                     # self.rs[self.active_rs_num].in_use = False
                     rs[self.active_rs_num].clear()
                     print("rs[", self.active_rs_num, "] released")
+                    self.active_rs_num = -1
         # TODO WB
 
 
@@ -267,13 +269,11 @@ class ROB:
 
 
 class Processor(object):
-    def __init__(self, num_rob, num_cdb, reg_int, reg_float, mem_val, num_inst):
-
-
-
+    def __init__(self, num_rob, num_cdb, reg_int, reg_float, mem_val, num_inst, inst_list):
         # TODO: process CDB
 
         # declare an final instruction table for every inst
+        # Issue, Exec, Mem, WB, Commit
         self.instruction_final_table = [[-1 for j in range(5)] for i in range(num_inst)]
 
         self.cycle = 100  # current cycle
@@ -299,6 +299,8 @@ class Processor(object):
         self.config.print_config()
 
         self.RS_Integer = [ReservationStation() for i in range(self.config.adder.rs_number)]
+        for i in range(len(self.RS_Integer)):
+            self.RS_Integer[i].index = i
 
         # init adder
         print("----------------------------------------")
@@ -306,6 +308,11 @@ class Processor(object):
         self.adder = Adder(self.config.adder)
         self.adder.print_config()
         # self.adder.operation(self.cycle)
+
+        self.inst_num = num_inst
+        # print("proc inst num: ", self.inst_num)
+        self.inst_list = inst_list
+        self.inst_issue_index = 0
 
     def clock(self):
         self.cycle += 1
@@ -346,15 +353,20 @@ class Processor(object):
     def execs(self):
         self.adder.operation(self.cycle, EXEC, self)
 
-    def issue(self, inst):
+    def issue(self):
+        print("inst list not empty")
+        if self.inst_issue_index <= self.inst_num - 1:
+            if self.issue_one_inst(self.inst_list[self.inst_issue_index]) == 0:
+                print("Issue Inst", self.inst_issue_index, self.inst_list[self.inst_issue_index].str, "succeed")
+                self.inst_issue_index += 1
+            else:
+                print("Issue Inst", self.inst_issue_index, "failed")
+
+    def issue_one_inst(self, inst):
         print(whoami())
         # 1. TODO: Check what FU (adder or multiplier) the following inst needs
         # 3. TODO: Circular buffer for ROB. Use head and tail to indicate the start and end of the ROB queue
         # 4. TODO: Check RAT to find out if the dependent registers are in ARF or ROB. Fill the RS with value or ROB entry
-
-
-
-
         # 2. TODO: Check if both RS (for this instruction) and ROB have empty entries. If so, issue it. Otherwise, skip issue in this cycle
 
         flag = False
@@ -366,12 +378,15 @@ class Processor(object):
         # If yes, go on to check RS
         for i in range(self.ROB_header, self.ROB_header+self.ROB_num):
             rob_entry_no = i % self.ROB_num
+            print("check ROB entry:", rob_entry_no)
             if self.ROB[rob_entry_no].idle == True:
-                self.ROB_header = (self.ROB_header+1) % self.ROB_num
+                # only update ROB header when RS is also available
+                # self.ROB_header = (self.ROB_header+1) % self.ROB_num
                 ROB_no = rob_entry_no
                 flag = True
                 break
 
+        print("ROB header is ", self.ROB_header)
         if flag == False:
             return -1
 
@@ -398,15 +413,15 @@ class Processor(object):
                 self.ROB[rob_entry_no].idle = False
                 self.ROB[rob_entry_no].instruction_index = inst.index
 
-
                 # 2.2 Update RAT
+                # RAT with dest 0-63 points to ARF
+                # RAT with dest 64 - ... points to ROB
                 self.RAT[inst.dest] = 64 + ROB_no
-
 
                 # 2.3 Update RS
                 self.RS_Integer[i].in_use = True
                 self.RS_Integer[i].instruction_type = inst.inst
-                self.RS_Integer[i].dest_addr = self.RAT[inst.dest] % 64
+                self.RS_Integer[i].dest_addr = ROB_no
                 self.RS_Integer[i].dest_value = -1
                 self.RS_Integer[i].instruction_index = inst.index
 
@@ -418,7 +433,6 @@ class Processor(object):
                 self.RS_Integer[i].src_addr = [src_0, src_1]
                 self.RS_Integer[i].start_cycle = -1
                 self.RS_Integer[i].finish_cycle = -1
-
 
                 # If both source is in ARF
                 if (src_0 < 64 and src_1 < 64):
@@ -440,11 +454,17 @@ class Processor(object):
                     self.RS_Integer[i].src_ready = [False, False]
                     self.RS_Integer[i].src_value = [-1, -1]
 
+                self.RS_Integer[i].rdy2exe_cycle = self.cycle + 1
+
                 flag = True
                 break
 
+        # Issue aborted
         if flag == False:
             return -1
+        else:
+            self.ROB_header = (self.ROB_header + 1) % self.ROB_num
+
 
         print("ROB[",ROB_no,"]:", self.ROB[ROB_no].idle, self.ROB[ROB_no].reg_number, self.ROB[ROB_no].reg_value,
               self.ROB[ROB_no].instruction_index)
@@ -453,6 +473,7 @@ class Processor(object):
         print("Current cycle is",self.cycle)
 
         # Add a new line for final output instruction table
+        # record Issue cycle
         self.instruction_final_table[inst.index][0] = self.cycle
 
         # print("ROB[0]:", self.ROB[0].idle, self.ROB[0].reg_number, self.ROB[0].reg_value, self.ROB[0].value_ready)
@@ -470,6 +491,9 @@ class Processor(object):
         # rs_temp = self.adder.rs[0]
         # print("adder.rs[0]:", rs_temp.src_value, rs_temp.in_use, rs_temp.instruction_type, rs_temp.dest_addr, rs_temp.dest_value,
         #       rs_temp.src_addr, rs_temp.src_ready, rs_temp.src_value, rs_temp.start_cycle, rs_temp.finish_cycle)
+
+        # Issue success
+        return 0
 
     def write_back(self):
         print("++++++++++++++++++++++++++++++++")
