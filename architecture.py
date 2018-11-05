@@ -163,7 +163,7 @@ class Adder:
 
                             self.busy = True
                             print("     Adder occupied:")
-                            rs[i].src_ready = [False, False]
+                            # rs[i].src_ready = [False, False]
                             self.start_cycle = current_cycle
                             # print(self.config.ex_cycles)
                             self.finish_cycle = current_cycle + self.config.ex_cycles
@@ -195,17 +195,18 @@ class Adder:
 
                     # update corresponding ROB entry
                     print("         update ROB entry ", rs[self.active_rs_num].dest_addr)
-                    processor.ROB[rs[self.active_rs_num].dest_addr].reg_value = rs[self.active_rs_num].dest_value
-                    processor.ROB[rs[self.active_rs_num].dest_addr].value_ready = True
+                    rob_entry = rs[self.active_rs_num].dest_addr - 64
+                    processor.ROB[rob_entry].reg_value = rs[self.active_rs_num].dest_value
+                    processor.ROB[rob_entry].value_ready = True
 
                     # Add current cycle as the WB cycle of corresponding instruction
-                    processor.instruction_final_table[processor.ROB[rs[self.active_rs_num].dest_addr].instruction_index][3] = current_cycle
+                    processor.instruction_final_table[processor.ROB[rob_entry].instruction_index][3] = current_cycle
 
                     # TODO: COMMIT = WB + 1
-                    processor.ROB[rs[self.active_rs_num].dest_addr].value_rdy2commit_cycle = current_cycle + 1
-                    print("ROB", self.active_rs_num, "updated to:", processor.ROB[rs[self.active_rs_num].dest_addr].reg_value,
-                          processor.ROB[rs[self.active_rs_num].dest_addr].value_ready,
-                          processor.ROB[rs[self.active_rs_num].dest_addr].value_rdy2commit_cycle)
+                    processor.ROB[rob_entry].value_rdy2commit_cycle = current_cycle + 1
+                    print("ROB", self.active_rs_num, "updated to:", processor.ROB[rob_entry].reg_value,
+                          processor.ROB[rob_entry].value_ready,
+                          processor.ROB[rob_entry].value_rdy2commit_cycle)
 
                     # update all the rs that pending this value
                     # for i, rs in enumerate(rs):
@@ -213,10 +214,13 @@ class Adder:
                         if rs[i].in_use == True:
                             for j in [0, 1]:
                                 if rs[i].src_ready[j] == False:
+                                    print("         update RS entry:", i, j)
+                                    print(rs[i].dest_addr, rs[i].src_addr[0], rs[i].src_addr[1])
                                     if rs[i].src_addr[j] == rs[self.active_rs_num].dest_addr:
                                         rs[i].src_ready[j] = True
                                         rs[i].src_addr[j] = -1
                                         rs[i].src_value[j] = rs[self.active_rs_num].dest_value
+                                        print("             updated RS entry:", i, j)
 
                     # release current RS entry
                     # self.rs[self.active_rs_num].in_use = False
@@ -421,7 +425,7 @@ class Processor(object):
                 # 2.3 Update RS
                 self.RS_Integer[i].in_use = True
                 self.RS_Integer[i].instruction_type = inst.inst
-                self.RS_Integer[i].dest_addr = ROB_no
+                self.RS_Integer[i].dest_addr = ROB_no + 64
                 self.RS_Integer[i].dest_value = -1
                 self.RS_Integer[i].instruction_index = inst.index
 
