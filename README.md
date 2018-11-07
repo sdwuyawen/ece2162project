@@ -1,4 +1,4 @@
-# ece2162project
+Commi# ece2162project
 ECE2162 Project
 test
 
@@ -23,7 +23,8 @@ EXECTUION
 WRITE BACK
   1. 
     
-
+Commit
+  1. TODO: If the correpsonding ROB value is the old value and cannot be found the RAT table for corresponding R, then we just abandon the old value. 
 
 
 
