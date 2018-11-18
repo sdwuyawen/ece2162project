@@ -1,4 +1,4 @@
-
+1. 
 
 
 Commi# ece2162project
@@ -30,16 +30,18 @@ Commit
   1. TODO: If the correpsonding ROB value is the old value and cannot be found the RAT table for corresponding R, then we just abandon the old value. 
 
 
-CDB -> 
+1. CDB -> 
+buffer (# of halting Register value) -> if buffer is full, the value will be stored in function unit, function unit cannot do write back, a CDB unit (class) must be implemented for all Write Back
+if conflict, the instruction with lower index can be written back first 
 
-Memory -> 
-L/S Queue -> 
+2. Memory -> 
+L/S Queue ->  
 
-Floating -> pipeline(adder)+Issue+instruction read
+3. Floating -> pipeline(adder)+Issue+instruction read
 
 
 
-Branch -> Prediction (PC = instruction index)
+4. Branch -> Prediction (PC = instruction index)
 RAT -> checkpoint before entering a branch/ only overwrite when the entry contains ROB / -1 
 RS (Head and Tail) -> delete the entries added after branch 
                       (add index to instructuion during ISSUE, if mispredict, delete the entries after the entry corresponding to the                           branch)
@@ -47,7 +49,6 @@ ROB (Head and Tail) -> delete the entries added after branch
                       (add index to instructuion during ISSUE, if mispredict, delete the entries after the entry corresponding to the                           branch)
 
 Function unit -> 
-
 Pipeline (floating point Add.d, Sub.d, Mult.d)
 Implement a queue containing the input instructions
 find out the instructions index after the branch 
