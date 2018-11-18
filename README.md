@@ -18,7 +18,8 @@ EXECTUION
   
   1. For every idle FU check if there is any entry in the RS 
     If YES, check if the entry has the value or ROB
-  2. LOAD/STORE RS will also need to be considered 
+
+2. LOAD/STORE RS will also need to be considered 
 
 WRITE BACK
   1. 
@@ -51,6 +52,7 @@ Predictor
 2. 8 One-bit predictors for every entry
 3. Prediction is done in the first cycle of execution (ISSUE)
 4. The branch can be resolved after EXE stage
+5. At the first, there is no value in the predictor. The predicted value will be settled after execution of the branch (Beq/Bne). 
 
 Recover
 RAT -> checkpoint before entering a branch/ only overwrite when the entry contains ROB / -1 
