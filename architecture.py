@@ -119,6 +119,16 @@ class ReservationStation:
         print(whoami())
 
 
+class LSQ:
+    def __init__(self):
+        self.type = "N"
+        self.addr = -1
+        self.value = -1
+
+    def clear(self):
+        self.__init__()
+
+
 class Adder:
     # adder_rs_number = 0
 
