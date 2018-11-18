@@ -1,3 +1,6 @@
+
+
+
 Commi# ece2162project
 ECE2162 Project
 test
@@ -28,10 +31,55 @@ Commit
 
 
 CDB -> 
+
+Memory -> 
 L/S Queue -> 
+
 Floating -> pipeline(adder)+Issue+instruction read
 
 
 
 Branch -> Prediction (PC = instruction index)
+RAT -> checkpoint before entering a branch/ only overwrite when the entry contains ROB / -1 
+RS (Head and Tail) -> delete the entries added after branch 
+                      (add index to instructuion during ISSUE, if mispredict, delete the entries after the entry corresponding to the                           branch)
+ROB (Head and Tail) -> delete the entries added after branch 
+                      (add index to instructuion during ISSUE, if mispredict, delete the entries after the entry corresponding to the                           branch)
+
+Function unit -> 
+
+Pipeline (floating point Add.d, Sub.d, Mult.d)
+Implement a queue containing the input instructions
+find out the instructions index after the branch 
+Delete
+
+Unpipeline (Integer Add Sub Add.i)
+Judge whether the instruction is after the branch 
+delete if it is
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
