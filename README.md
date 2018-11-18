@@ -27,4 +27,11 @@ Commit
   1. TODO: If the correpsonding ROB value is the old value and cannot be found the RAT table for corresponding R, then we just abandon the old value. 
 
 
+CDB -> 
+L/S Queue -> 
+Floating -> pipeline(adder)+Issue+instruction read
+
+
+
+Branch -> Prediction (PC = instruction index)
 
