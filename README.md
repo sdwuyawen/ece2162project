@@ -27,30 +27,32 @@ Commit
   1. TODO: If the correpsonding ROB value is the old value and cannot be found the RAT table for corresponding R, then we just abandon the old value. 
 
 
-1. CDB -> 
+## 1. CDB -> 
 buffer (# of halting Register value) -> if buffer is full, the value will be stored in function unit, function unit cannot do write back, a CDB unit (class) must be implemented for all Write Back
 if conflict, the instruction with lower index can be written back first 
 
-2. Memory -> 
+## 2. Memory -> 
 L/S Queue -> 
 1. PC -> instruction index
 2. Load will check the last entry of Store first, Load will only execute after all Store execute. 
 3. Forwarding -> Load will get value from LSQ in MEM (One cycle)
-3. Store will be dequeued after Commit
-3. Load will be dequeued after WB
+4. Store will be dequeued after Commit
+5. Load will be dequeued after WB
 
-3. Floating -> pipeline(adder)+Issue+instruction read
+## 3. Floating ->
+pipeline(adder)+Issue+instruction read
 
 
 
-4. Branch -> Prediction (PC = instruction index)
+## 4. Branch -> 
+Prediction (PC = instruction index)
 Predictor
 1. BTB -> 8 entries to store the target (last three bits of the index)
 2. 8 One-bit predictors for every entry
 3. Prediction is done in the first cycle of execution (ISSUE)
 4. The branch can be resolved after EXE stage
 
-
+Recover
 RAT -> checkpoint before entering a branch/ only overwrite when the entry contains ROB / -1 
 RS (Head and Tail) -> delete the entries added after branch 
                       (add index to instructuion during ISSUE, if mispredict, delete the entries after the entry corresponding to the                           branch)
