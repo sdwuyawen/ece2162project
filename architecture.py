@@ -398,9 +398,6 @@ class Processor(object):
         # If no, return -1
         # If yes, update RS, ROB, RAT with instruction
         #
-        #
-        #
-        #
         # Note: Right now, this function has not decided which RS to be put
 
         flag = False
