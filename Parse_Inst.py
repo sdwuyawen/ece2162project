@@ -6,6 +6,7 @@ class Instruction:
         self.source_1 = source_1
         self.index = index
         self.str = str
+        self.ID = -1
 
 # IDEA:
 # 1. Read the instruction file
