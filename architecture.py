@@ -186,6 +186,10 @@ class Adder:
                     # self.wbing_value = self.rs[self.active_rs_num].dest_value
 
         elif operation == WRITE_BACK:
+            # TODO: for memory load inst, its LSQ entry is cleared after getting value from memory or from previous load in LSQ
+            # TODO: for memory store inst STR R1, R2(0), its LSQ entry is enqueued when the STR is issued, and dequeued when the commit is finished
+            # The memory address is calculated in Ex stage. When R1 is ready to the LSQ, it broadcasts to all LSQ entry (Load) pending the memory address R2+0.
+            # When R2 is ready, the memory address is calculated, and it broadcasts to all LSQ entry (Load) pending the memory address R2+0
             print("Adder WB:")
             if self.busy == True:
                 print(" Adder.busy:")
@@ -509,6 +513,7 @@ class Processor(object):
 
     def commit(self):  # pc 1103
         print("Commit begin:")
+        # TODO: when commit, if the RAT entry does not point to this ROB entry, abandon this register value in ROB, and do not update ARF
         rob_H = self.ROB[self.ROB_tail]  # ROB header entry
         if rob_H.value_ready == True and self.cycle==self.ROB[self.ROB_tail].value_rdy2commit_cycle:  # ready to commit
 
