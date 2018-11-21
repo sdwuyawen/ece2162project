@@ -1,4 +1,24 @@
-class Instruction:
+class Data_Instruction:
+    def __init__(self, inst, dest, offset, source, index, str):
+        self.inst = inst
+        self.dest = dest
+        self.offset = offset
+        self.source = source
+        self.index = index
+        self.str = str
+        self.ID = -1
+
+class Control_Instruction:
+    def __init__(self, inst, source_0, source_1, offset, index, str):
+        self.inst = inst
+        self.source_0 = source_0
+        self.source_1 = source_1
+        self.offset = offset
+        self.index = index
+        self.str = str
+        self.ID = -1
+
+class ALU_Instruction:
     def __init__(self, inst, dest, source_0, source_1, index, str):
         self.inst = inst
         self.dest = dest
@@ -22,39 +42,115 @@ def parse_inst():
         y = x.split(' ')
 
         if len(y) == 4:
+            # Control instruction
+            if ALU_Inst_Type(y[0]) == 3 or ALU_Inst_Type(y[0]) == 4:
 
-            operand_construct = Inst_No(y[0])
-            print(operand_construct)
+                # operand added
+                operand_construct = ALU_Inst_Type(y[0])
+                print(operand_construct)
 
-            print(y[1].split(',')[0])
-            dest_operand_1 = int(y[1].split(',')[0][1:])
-            print (dest_operand_1)
+                # comparator 0 (R->integer)
+                print(y[1].split(',')[0])
+                source_operand_0 = int(y[1].split(',')[0][1:])
+                print (source_operand_0)
 
-            print(y[2].split(',')[0])
-            source_operand_0 = int(y[2].split(',')[0][1:])
-            print(source_operand_0)
+                # comparator 1 (R->integer)
+                print(y[2].split(',')[0])
+                source_operand_1 = int(y[2].split(',')[0][1:])
+                print(source_operand_1)
 
-            print(y[3].split('\n')[0])
-            source_operand_1 = int(y[3].split(',')[0][1:])
-            print(source_operand_1)
+                # offset (Integer)
+                print(y[3].split('\n')[0])
+                offset = int(y[3].split('\n')[0])
+                print(offset)
 
-            p = Instruction(operand_construct, dest_operand_1, source_operand_0, source_operand_1, i, x)
-            print ("p's inst is",p.inst,"index is",p.index)
+                p = Control_Instruction(operand_construct, source_operand_0, source_operand_1, offset, i, x)
+                print ("p's inst is",p.inst,"offset is",p.offset)
+
+
+            else:
+                operand_construct = ALU_Inst_Type(y[0])
+                print(operand_construct)
+
+                # if operand is Addi, the last input is immediate.
+                if operand_construct == 7:
+
+                    print(y[1].split(',')[0])
+                    dest_operand = int(y[1].split(',')[0][1:])
+                    print(dest_operand)
+
+                    print(y[2].split(',')[0])
+                    source_operand_0 = int(y[2].split(',')[0][1:])
+                    print(source_operand_0)
+
+                    print(y[3].split('\n')[0])
+                    source_operand_1 = y[3].split('\n')[0]
+                    print(source_operand_1)
+
+                # if operand is float, the register are floating number.
+                elif operand_construct == 6 or operand_construct == 9 or operand_construct == 10:
+
+                    print(y[1].split(',')[0])
+                    dest_operand = int(y[1].split(',')[0][1:])
+                    print(dest_operand+32)
+
+                    print(y[2].split(',')[0])
+                    source_operand_0 = int(y[2].split(',')[0][1:])
+                    print(source_operand_0+32)
+
+                    print(y[3].split('\n')[0])
+                    source_operand_1 = int(y[3].split('\n')[0][1:])
+                    print(source_operand_1+32)
+                else:
+
+                    print(y[1].split(',')[0])
+                    dest_operand = int(y[1].split(',')[0][1:])
+                    print(dest_operand)
+
+                    print(y[2].split(',')[0])
+                    source_operand_0 = int(y[2].split(',')[0][1:])
+                    print(source_operand_0)
+
+                    print(y[3].split('\n')[0])
+                    source_operand_1 = int(y[3].split('\n')[0][1:])
+                    print(source_operand_1)
+
+                p = ALU_Instruction(operand_construct, dest_operand, source_operand_0, source_operand_1, i, x)
+                print ("p's inst is",p.inst,"index is",p.index)
 
             inst_list.append(p)
             i+=1
         # TODO: Ld/Sd Left since there are only two operands
         if len(y) == 3:
-            print(y[0])
 
+            # operand added
+            operand_construct = ALU_Inst_Type(y[0])
+            print(operand_construct)
+
+            # Destination (F register)
             print(y[1].split(',')[0])
+            dest_operand = int(y[1].split(',')[0][1:])
+            print(dest_operand+32)
 
-            print(y[2].split('\n')[0])
+            # offset (Integer)
+            print(y[2].split('(')[0])
+            offset = int(y[2].split('(')[0])
+            print(offset)
+
+            # Source (R register)
+            print(y[2].split('(')[1].split(')')[0])
+            source_operand = int(y[2].split('(')[1].split(')')[0][1:])
+            print(source_operand)
+
+            p = Data_Instruction(operand_construct, dest_operand, offset, source_operand, i, x)
+            print("p's inst is", p.inst, "offset is", p.offset)
+
             i+=1
     return inst_list, len(inst_list)
     print("end!")
 
-def Inst_No (inst_type):
+def ALU_Inst_Type (inst_type):
+
     if inst_type == "Ld":
         return 1
     elif inst_type == "Sd":
@@ -75,4 +171,4 @@ def Inst_No (inst_type):
         return 9
     elif inst_type == "Mult.d":
         return 10
-
+    return 0
