@@ -18,7 +18,7 @@ from Parse_Inst import *
 
 EXEC = 0
 WRITE_BACK = 1
-
+WRITE_BACK_CHECK = 2
 
 
 def whoami():
@@ -106,7 +106,7 @@ class ReservationStation:
         self.index = 0
         self.in_use = False
         self.instruction_type = -1
-        self.instruction_index = -1
+        self.instruction_id = -1
         self.dest_addr = -1
         self.dest_value = -1
         self.src_addr = [-1, -1]
@@ -195,7 +195,17 @@ class Adder:
                     # self.wbing_cycle = current_cycle + 1
                     # self.wbing_value = self.rs[self.active_rs_num].dest_value
 
+        # Before WB, the processor collect all the WB requests from FUs, and choose the inst with lowest ID
+        elif operation == WRITE_BACK_CHECK:
+            if self.busy == True:
+                if self.wbing_cycle <= current_cycle:
+                    processor.CDB.arbiter_q.append(rs[self.active_rs_num].instruction_id)
+
         elif operation == WRITE_BACK:
+            # TODO: for memory load inst, its LSQ entry is cleared after getting value from memory or from previous load in LSQ
+            # TODO: for memory store inst STR R1, R2(0), its LSQ entry is enqueued when the STR is issued, and dequeued when the commit is finished
+            # The memory address is calculated in Ex stage. When R1 is ready to the LSQ, it broadcasts to all LSQ entry (Load) pending the memory address R2+0.
+            # When R2 is ready, the memory address is calculated, and it broadcasts to all LSQ entry (Load) pending the memory address R2+0
             print("Adder WB:")
             if self.busy == True:
                 print(" Adder.busy:")
@@ -205,14 +215,13 @@ class Adder:
 
                     # update corresponding ROB entry
                     print("         update ROB entry ", rs[self.active_rs_num].dest_addr)
-                    rob_entry = rs[self.active_rs_num].dest_addr - 64
+                    rob_entry = rs[self.active_rs_num].dest_addr - 64       # rob entry 0 starts with number 64
                     processor.ROB[rob_entry].reg_value = rs[self.active_rs_num].dest_value
                     processor.ROB[rob_entry].value_ready = True
 
                     # Add current cycle as the WB cycle of corresponding instruction
                     processor.instruction_final_table[processor.ROB[rob_entry].instruction_index][3] = current_cycle
 
-                    # TODO: COMMIT = WB + 1
                     processor.ROB[rob_entry].value_rdy2commit_cycle = current_cycle + 1
                     print("ROB", self.active_rs_num, "updated to:", processor.ROB[rob_entry].reg_value,
                           processor.ROB[rob_entry].value_ready,
@@ -282,6 +291,11 @@ class ROB:
 #     def __init__(self, processor):
 
 
+class CDB:
+    def __init__(self):
+        self.arbiter_q = list()
+
+
 class Processor(object):
     def __init__(self, num_rob, num_cdb, reg_int, reg_float, mem_val, num_inst, inst_list):
         # TODO: process CDB
@@ -327,6 +341,10 @@ class Processor(object):
         # print("proc inst num: ", self.inst_num)
         self.inst_list = inst_list
         self.inst_issue_index = 0
+        # Instruction unique ID
+        self.inst_ID_last = 0
+
+        self.CDB = CDB()
 
     def clock(self):
         self.cycle += 1
@@ -419,6 +437,10 @@ class Processor(object):
 
                 RS_no = i
 
+                # Unique ID for each instruction. For CDB arbiter, the inst with smaller ID is first served
+                inst.ID = self.inst_ID_last
+                self.inst_ID_last = self.inst_ID_last + 1
+
                 # 2.1 Update ROB
                 self.ROB[rob_entry_no].reg_number = inst.dest
                 self.ROB[rob_entry_no].idle = False
@@ -426,7 +448,7 @@ class Processor(object):
 
                 # 2.2 Update RAT
                 # RAT with dest 0-63 points to ARF
-                # RAT with dest 64 - ... points to ROB
+                # RAT with dest >= 64 ... points to ROB
                 self.RAT[inst.dest] = 64 + ROB_no
 
                 # 2.3 Update RS
@@ -435,6 +457,7 @@ class Processor(object):
                 self.RS_Integer[i].dest_addr = ROB_no + 64
                 self.RS_Integer[i].dest_value = -1
                 self.RS_Integer[i].instruction_index = inst.index
+                self.RS_Integer[i].instruction_id = inst.ID
 
                 src_0 = self.RAT[inst.source_0]
                 print("src_0 is", src_0)
@@ -506,9 +529,15 @@ class Processor(object):
         # Issue success
         return 0
 
+    def write_back_check(self):
+        self.adder.operation(self.cycle, WRITE_BACK_CHECK, self)
+        print("CDB Queue:")
+        print(self.CDB.arbiter_q)
+
     def write_back(self):
         print("++++++++++++++++++++++++++++++++")
         print(self)
+        self.write_back_check()
         self.adder.operation(self.cycle, WRITE_BACK, self)
 
     def execs(self):
@@ -516,6 +545,7 @@ class Processor(object):
 
     def commit(self):  # pc 1103
         print("Commit begin:")
+        # TODO: when commit, if the RAT entry does not point to this ROB entry, abandon this register value in ROB, and do not update ARF
         rob_H = self.ROB[self.ROB_tail]  # ROB header entry
         if rob_H.value_ready == True and self.cycle==self.ROB[self.ROB_tail].value_rdy2commit_cycle:  # ready to commit
 
