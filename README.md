@@ -55,9 +55,11 @@ Predictor
 5. At the first, there is no value in the predictor. The predicted value will be settled after execution of the branch (Beq/Bne). 
 
 Recover
-RAT -> checkpoint before entering a branch/ only overwrite when the entry contains ROB / -1 
+RAT -> checkpoint before entering a branch/ only overwrite when the current entry contains ROB (The new entries pointing to ARF come from the Commit of instructions before the branch after the branch prediction) / -1 
+
 RS (Head and Tail) -> delete the entries added after branch 
                       (add index to instructuion during ISSUE, if mispredict, delete the entries after the entry corresponding to the                           branch)
+                      
 ROB (Head and Tail) -> delete the entries added after branch 
                       (add index to instructuion during ISSUE, if mispredict, delete the entries after the entry corresponding to the                           branch)
 
