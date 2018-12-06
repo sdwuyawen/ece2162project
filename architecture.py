@@ -21,6 +21,8 @@ WRITE_BACK = 1
 WRITE_BACK_CHECK = 2
 
 
+
+
 def whoami():
     import sys
     return sys._getframe(1).f_code.co_name
@@ -121,9 +123,21 @@ class ReservationStation:
 
 class LSQ:
     def __init__(self):
-        self.type = "N"
+        self.type = "N" # set to be L/S
         self.addr = -1
         self.value = -1
+
+
+        self.index = 0
+        self.in_use = False
+        self.instruction_type = -1
+        self.instruction_id = -1
+        self.offset = -1
+        #
+        self.src_FR_addr = [-1, -1]
+        self.src_ready = [False, False]
+        self.src_value = [-1, -1]
+        self.rdy2exe_cycle = -1
 
     def clear(self):
         self.__init__()
@@ -308,9 +322,14 @@ class Processor(object):
 
         self.ROB = [ROB() for i in range(num_rob)]  # set 1000 ROB entries
         print(self.ROB.__len__())
-        self.ROB_header = 0
+        self.ROB_head = 0
         self.ROB_tail = 0
         self.ROB_num = num_rob
+
+        self.INDEX_LSQ = 0
+        self.INDEX_INT_ADDER = 0
+        self.INDEX_FLOAT_ADDER = 0
+        self.INDEX_FLOAT_MUL = 0
 
         self.ARF = ARF(reg_int, reg_float)
         self.RAT = array.array('i')  # unsigned int
@@ -326,13 +345,38 @@ class Processor(object):
         self.config.read_config()
         self.config.print_config()
 
-        self.RS_Integer = [ReservationStation() for i in range(self.config.adder.rs_number)]
-        for i in range(len(self.RS_Integer)):
-            self.RS_Integer[i].index = i
+        for j in range(self.config.ldst.rs_number):
+            # LSQ_list =
+            self.RS_LSQ = [[LSQ() for i in range(self.config.ldst.rs_number)] for i in range(self.config.ldst.fu_number)]
+            for i in range(self.config.ldst.fu_number):
+                for j in range(self.config.ldst.rs_number):
+                    self.RS_LSQ[i][j].index = i
+
+        for j in range(self.config.adder.fu_number):
+            # int_adder_list =
+            self.RS_Integer_Adder = [[ReservationStation() for i in range(self.config.adder.rs_number)] for i in range(self.config.adder.fu_number)]
+            for i in range(self.config.adder.fu_number):
+                for j in range(self.config.adder.rs_number):
+                    self.RS_Integer_Adder[i][j].index = i
+
+        for j in range(self.config.fpadder.fu_number):
+            # float_adder_list =
+            self.RS_Float_Adder = [[ReservationStation() for i in range(self.config.fpadder.rs_number)] for i in range(self.config.fpadder.fu_number)]
+            for i in range(self.config.fpadder.fu_number):
+                for j in range(self.config.fpadder.rs_number):
+                    self.RS_Float_Adder[i][j].index = i
+
+        for j in range(self.config.fpadder.fu_number):
+            # float_mul_list =
+            self.RS_Float_Mul = [[ReservationStation() for i in range(self.config.fpmul.rs_number)] for i in range(self.config.fpmul.fu_number)]
+            for i in range(self.config.fpmul.fu_number):
+                for j in range(self.config.fpmul.rs_number):
+                    self.RS_Float_Mul[i][j].index = i
+
 
         # init adder
         print("----------------------------------------")
-        print(self.RS_Integer)
+        print(self.RS_Integer_Adder)
         self.adder = Adder(self.config.adder)
         self.adder.print_config()
         # self.adder.operation(self.cycle)
@@ -386,13 +430,14 @@ class Processor(object):
         self.adder.operation(self.cycle, EXEC, self)
 
     def issue(self):
-        print("inst list not empty")
+        print("\ninst list not empty")
         if self.inst_issue_index <= self.inst_num - 1:
             if self.issue_one_inst(self.inst_list[self.inst_issue_index]) == 0:
                 print("Issue Inst", self.inst_issue_index, self.inst_list[self.inst_issue_index].str, "succeed")
                 self.inst_issue_index += 1
             else:
                 print("Issue Inst", self.inst_issue_index, "failed")
+
 
     def issue_one_inst(self, inst):
         print(whoami())
@@ -405,10 +450,88 @@ class Processor(object):
         ROB_no = -1
         RS_no = -1
 
+        # Load/Store inst
+        if inst.inst == 1 or inst.inst == 2:
+
+            print("RS number is", len(self.RS_LSQ))
+
+            for x in range(self.INDEX_LSQ, self.INDEX_LSQ + len(self.RS_LSQ)):
+                j = x % (len(self.RS_LSQ))
+                print("input j is", j)
+
+                for i in range(0, len(self.RS_LSQ[j])):
+                    print("self.RS_Integer_Adder[", j, "][", i, "].in_use is", self.RS_LSQ[j][i].in_use)
+                    if self.RS_LSQ[j][i].in_use == False:
+
+                        RS_no = i
+
+                        # Unique ID for each instruction. For CDB arbiter, the inst with smaller ID is first served
+                        inst.ID = self.inst_ID_last
+                        self.inst_ID_last = self.inst_ID_last + 1
+
+                        # 2.1 Update ROB
+                        # self.ROB[rob_entry_no].reg_number = inst.dest
+                        # self.ROB[rob_entry_no].idle = False
+                        # self.ROB[rob_entry_no].instruction_index = inst.index
+
+                        # 2.2 Update RAT
+                        # RAT with dest 0-63 points to ARF
+                        # RAT with dest >= 64 ... points to ROB
+                        # self.RAT[inst.dest] = 64 + ROB_no
+
+                        # 2.3 Update RS
+                        self.RS_LSQ[j][i].in_use = True
+                        self.RS_LSQ[j][i].instruction_type = inst.inst
+                        self.RS_LSQ[j][i].offset = inst.offset
+                        self.RS_LSQ[j][i].instruction_index = inst.index
+                        self.RS_LSQ[j][i].instruction_id = inst.ID
+
+                        src_F = self.RAT[inst.F+32]
+                        print("src_0 is", src_F)
+
+                        src_R = self.RAT[inst.R]
+                        print("src_1 is", src_R)
+
+                        self.RS_LSQ[j][i].src_FR_addr = [src_F, src_R]
+                        self.RS_LSQ[j][i].start_cycle = -1
+                        self.RS_LSQ[j][i].finish_cycle = -1
+
+                        # If both source is in ARF
+                        if (src_F < 64 and src_R < 64):
+                            self.RS_Integer_Adder[j][i].src_ready = [True, True]
+                            self.RS_Integer_Adder[j][i].src_value = [self.ARF.reg_float[src_F-32],
+                                                                     self.ARF.reg_int[src_R]]
+
+                        # if source 0 is from ROB, source 1 is from ARF
+                        if (src_F >= 64 and src_R < 64):
+                            self.RS_Integer_Adder[j][i].src_ready = [False, True]
+                            self.RS_Integer_Adder[j][i].src_value = [-1, self.ARF.reg_int[src_R]]
+
+                        # if source 0 is from ARF, source 1 is from ROB
+                        if (src_F < 64 and src_R >= 64):
+                            self.RS_Integer_Adder[j][i].src_ready = [True, False]
+                            self.RS_Integer_Adder[j][i].src_value = [self.ARF.reg_float[src_F], -1]
+
+                        # if both are from ROB
+                        if (src_F >= 64 and src_R >= 64):
+                            self.RS_Integer_Adder[j][i].src_ready = [False, False]
+                            self.RS_Integer_Adder[j][i].src_value = [-1, -1]
+
+                        self.RS_Integer_Adder[j][i].rdy2exe_cycle = self.cycle + 1
+
+                        flag = True
+                        self.INDEX_LSQ = j + 1
+                        print("go to break")
+                        break
+                if flag:
+                    break
+
+            return 0
+
         # 2.1 Check if the ROB has empty entry.
         # If no, return -1
         # If yes, go on to check RS
-        for i in range(self.ROB_header, self.ROB_header+self.ROB_num):
+        for i in range(self.ROB_head, self.ROB_head + self.ROB_num):
             rob_entry_no = i % self.ROB_num
             print("check ROB entry:", rob_entry_no)
             if self.ROB[rob_entry_no].idle == True:
@@ -418,93 +541,389 @@ class Processor(object):
                 flag = True
                 break
 
-        print("ROB header is ", self.ROB_header)
+        print("ROB head index is ", self.ROB_head)
         if flag == False:
             return -1
+
+
+
+
+        elif inst.inst == 3 or inst.inst == 4:
+            flag = False
+
+            print("RS number is", len(self.RS_Integer_Adder))
+
+            for x in range(self.INDEX_INT_ADDER, self.INDEX_INT_ADDER + len(self.RS_Integer_Adder)):
+                j = x % (len(self.RS_Integer_Adder))
+                print("input j is", j)
+
+                for i in range(0, len(self.RS_Integer_Adder[j])):
+                    print("self.RS_Integer_Adder[", j, "][", i, "].in_use is", self.RS_Integer_Adder[j][i].in_use)
+                    if self.RS_Integer_Adder[j][i].in_use == False:
+
+                        RS_no = i
+
+                        # Unique ID for each instruction. For CDB arbiter, the inst with smaller ID is first served
+                        inst.ID = self.inst_ID_last
+                        self.inst_ID_last = self.inst_ID_last + 1
+
+                        # 2.1 Update ROB
+                        self.ROB[rob_entry_no].reg_number = inst.dest
+                        self.ROB[rob_entry_no].idle = False
+                        self.ROB[rob_entry_no].instruction_index = inst.index
+
+                        # 2.2 Update RAT
+                        # RAT with dest 0-63 points to ARF
+                        # RAT with dest >= 64 ... points to ROB
+                        self.RAT[inst.dest] = 64 + ROB_no
+
+                        # 2.3 Update RS
+                        self.RS_Integer_Adder[j][i].in_use = True
+                        self.RS_Integer_Adder[j][i].instruction_type = inst.inst
+                        self.RS_Integer_Adder[j][i].dest_addr = ROB_no + 64
+                        self.RS_Integer_Adder[j][i].dest_value = -1
+                        self.RS_Integer_Adder[j][i].instruction_index = inst.index
+                        self.RS_Integer_Adder[j][i].instruction_id = inst.ID
+
+                        src_0 = self.RAT[inst.source_0]
+                        print("src_0 is", src_0)
+
+                        if inst.inst == 7:
+
+                            src_1 = int(inst.source_1)
+                            print("src_1 is", src_1)
+
+                            self.RS_Integer_Adder[j][i].src_addr = [src_0, src_1]
+                            self.RS_Integer_Adder[j][i].start_cycle = -1
+                            self.RS_Integer_Adder[j][i].finish_cycle = -1
+
+                            # If both source is in ARF
+                            if (src_0 < 64):
+                                self.RS_Integer_Adder[j][i].src_ready = [True, True]
+                                self.RS_Integer_Adder[j][i].src_value = [self.ARF.reg_int[src_0],
+                                                                         src_1]
+
+                            # if source 0 is from ROB
+                            if (src_0 >= 64 and src_1 < 64):
+                                self.RS_Integer_Adder[j][i].src_ready = [False, True]
+                                self.RS_Integer_Adder[j][i].src_value = [-1, src_1]
+
+                            self.RS_Integer_Adder[j][i].rdy2exe_cycle = self.cycle + 1
+
+                        else:
+                            src_1 = self.RAT[inst.source_1]
+                            print("src_1 is", src_1)
+
+                            self.RS_Integer_Adder[j][i].src_addr = [src_0, src_1]
+                            self.RS_Integer_Adder[j][i].start_cycle = -1
+                            self.RS_Integer_Adder[j][i].finish_cycle = -1
+
+                            # If both source is in ARF
+                            if (src_0 < 64 and src_1 < 64):
+                                self.RS_Integer_Adder[j][i].src_ready = [True, True]
+                                self.RS_Integer_Adder[j][i].src_value = [self.ARF.reg_int[src_0],
+                                                                         self.ARF.reg_int[src_1]]
+
+                            # if source 0 is from ROB, source 1 is from ARF
+                            if (src_0 >= 64 and src_1 < 64):
+                                self.RS_Integer_Adder[j][i].src_ready = [False, True]
+                                self.RS_Integer_Adder[j][i].src_value = [-1, self.ARF.reg_int[src_1]]
+
+                            # if source 0 is from ARF, source 1 is from ROB
+                            if (src_0 < 64 and src_1 >= 64):
+                                self.RS_Integer_Adder[j][i].src_ready = [True, False]
+                                self.RS_Integer_Adder[j][i].src_value = [self.ARF.reg_int[src_0], -1]
+
+                            # if both are from ROB
+                            if (src_0 >= 64 and src_1 >= 64):
+                                self.RS_Integer_Adder[j][i].src_ready = [False, False]
+                                self.RS_Integer_Adder[j][i].src_value = [-1, -1]
+
+                            self.RS_Integer_Adder[j][i].rdy2exe_cycle = self.cycle + 1
+
+                        flag = True
+                        self.INDEX_INT_ADDER = j + 1
+                        print("go to break")
+                        break
+                if flag:
+                    break
+        # Integer addition and subtraction
+        elif inst.inst == 5 or inst.inst == 7 or inst.inst == 8:
+            flag = False
+
+            print("RS number is", len(self.RS_Integer_Adder))
+
+            for x in range(self.INDEX_INT_ADDER, self.INDEX_INT_ADDER+len(self.RS_Integer_Adder)):
+                j = x % (len(self.RS_Integer_Adder))
+                print("input j is", j)
+
+                for i in range(0, len(self.RS_Integer_Adder[j])):
+                    print("self.RS_Integer_Adder[",j,"][",i,"].in_use is", self.RS_Integer_Adder[j][i].in_use)
+                    if self.RS_Integer_Adder[j][i].in_use == False:
+
+                        RS_no = i
+
+                        # Unique ID for each instruction. For CDB arbiter, the inst with smaller ID is first served
+                        inst.ID = self.inst_ID_last
+                        self.inst_ID_last = self.inst_ID_last + 1
+
+                        # 2.1 Update ROB
+                        self.ROB[rob_entry_no].reg_number = inst.dest
+                        self.ROB[rob_entry_no].idle = False
+                        self.ROB[rob_entry_no].instruction_index = inst.index
+
+                        # 2.2 Update RAT
+                        # RAT with dest 0-63 points to ARF
+                        # RAT with dest >= 64 ... points to ROB
+                        self.RAT[inst.dest] = 64 + ROB_no
+
+                        # 2.3 Update RS
+                        self.RS_Integer_Adder[j][i].in_use = True
+                        self.RS_Integer_Adder[j][i].instruction_type = inst.inst
+                        self.RS_Integer_Adder[j][i].dest_addr = ROB_no + 64
+                        self.RS_Integer_Adder[j][i].dest_value = -1
+                        self.RS_Integer_Adder[j][i].instruction_index = inst.index
+                        self.RS_Integer_Adder[j][i].instruction_id = inst.ID
+
+                        src_0 = self.RAT[inst.source_0]
+                        print("src_0 is", src_0)
+
+                        if inst.inst == 7:
+
+                            src_1 = int(inst.source_1)
+                            print("src_1 is", src_1)
+
+                            self.RS_Integer_Adder[j][i].src_addr = [src_0, src_1]
+                            self.RS_Integer_Adder[j][i].start_cycle = -1
+                            self.RS_Integer_Adder[j][i].finish_cycle = -1
+
+                            # If both source is in ARF
+                            if (src_0 < 64):
+                                self.RS_Integer_Adder[j][i].src_ready = [True, True]
+                                self.RS_Integer_Adder[j][i].src_value = [self.ARF.reg_int[src_0],
+                                                                         src_1]
+
+                            # if source 0 is from ROB
+                            if (src_0 >= 64 and src_1 < 64):
+                                self.RS_Integer_Adder[j][i].src_ready = [False, True]
+                                self.RS_Integer_Adder[j][i].src_value = [-1, src_1]
+
+                            self.RS_Integer_Adder[j][i].rdy2exe_cycle = self.cycle + 1
+
+                        else:
+                            src_1 = self.RAT[inst.source_1]
+                            print("src_1 is", src_1)
+
+                            self.RS_Integer_Adder[j][i].src_addr = [src_0, src_1]
+                            self.RS_Integer_Adder[j][i].start_cycle = -1
+                            self.RS_Integer_Adder[j][i].finish_cycle = -1
+
+                            # If both source is in ARF
+                            if (src_0 < 64 and src_1 < 64):
+                                self.RS_Integer_Adder[j][i].src_ready = [True, True]
+                                self.RS_Integer_Adder[j][i].src_value = [self.ARF.reg_int[src_0], self.ARF.reg_int[src_1]]
+
+                            # if source 0 is from ROB, source 1 is from ARF
+                            if (src_0 >= 64 and src_1 < 64):
+                                self.RS_Integer_Adder[j][i].src_ready = [False, True]
+                                self.RS_Integer_Adder[j][i].src_value = [-1, self.ARF.reg_int[src_1]]
+
+                            # if source 0 is from ARF, source 1 is from ROB
+                            if (src_0 < 64 and src_1 >= 64):
+                                self.RS_Integer_Adder[j][i].src_ready = [True, False]
+                                self.RS_Integer_Adder[j][i].src_value = [self.ARF.reg_int[src_0], -1]
+
+                            # if both are from ROB
+                            if (src_0 >= 64 and src_1 >= 64):
+                                self.RS_Integer_Adder[j][i].src_ready = [False, False]
+                                self.RS_Integer_Adder[j][i].src_value = [-1, -1]
+
+                            self.RS_Integer_Adder[j][i].rdy2exe_cycle = self.cycle + 1
+
+                        flag = True
+                        self.INDEX_INT_ADDER = j+1
+                        print("go to break")
+                        break
+                if flag:
+                    break
+        # Float addition and subtraction
+        elif inst.inst == 6 or inst.inst == 9:
+            flag = False
+
+            print("RS number is", len(self.RS_Float_Adder))
+
+            for x in range(self.INDEX_FLOAT_ADDER, self.INDEX_FLOAT_ADDER + len(self.RS_Float_Adder)):
+                j = x % (len(self.RS_Float_Adder))
+                print("input j is", j)
+
+                for i in range(0, len(self.RS_Float_Adder[j])):
+                    print("self.RS_Float_Adder[", j, "][", i, "].in_use is", self.RS_Float_Adder[j][i].in_use)
+                    if self.RS_Float_Adder[j][i].in_use == False:
+
+                        RS_no = i
+
+                        # Unique ID for each instruction. For CDB arbiter, the inst with smaller ID is first served
+                        inst.ID = self.inst_ID_last
+                        self.inst_ID_last = self.inst_ID_last + 1
+
+                        # 2.1 Update ROB
+                        self.ROB[rob_entry_no].reg_number = inst.dest
+                        self.ROB[rob_entry_no].idle = False
+                        self.ROB[rob_entry_no].instruction_index = inst.index
+
+                        # 2.2 Update RAT
+                        # RAT with dest 0-63 points to ARF
+                        # RAT with dest >= 64 ... points to ROB
+                        self.RAT[inst.dest] = 64 + ROB_no
+
+                        # 2.3 Update RS
+                        self.RS_Float_Adder[j][i].in_use = True
+                        self.RS_Float_Adder[j][i].instruction_type = inst.inst
+                        self.RS_Float_Adder[j][i].dest_addr = ROB_no + 64
+                        self.RS_Float_Adder[j][i].dest_value = -1
+                        self.RS_Float_Adder[j][i].instruction_index = inst.index
+                        self.RS_Float_Adder[j][i].instruction_id = inst.ID
+
+                        src_0 = self.RAT[inst.source_0+32]
+                        print("src_0 is", src_0)
+
+                        src_1 = self.RAT[inst.source_1+32]
+                        print("src_1 is", src_1)
+
+                        self.RS_Float_Adder[j][i].src_addr = [src_0, src_1]
+                        self.RS_Float_Adder[j][i].start_cycle = -1
+                        self.RS_Float_Adder[j][i].finish_cycle = -1
+
+                        # If both source is in ARF
+                        if (src_0 < 64 and src_1 < 64):
+                            self.RS_Float_Adder[j][i].src_ready = [True, True]
+                            self.RS_Float_Adder[j][i].src_value = [self.ARF.reg_float[src_0-32],
+                                                                     self.ARF.reg_float[src_1-32]]
+
+                        # if source 0 is from ROB, source 1 is from ARF
+                        if (src_0 >= 64 and src_1 < 64):
+                            self.RS_Float_Adder[j][i].src_ready = [False, True]
+                            self.RS_Float_Adder[j][i].src_value = [-1, self.ARF.reg_float[src_1-32]]
+
+                        # if source 0 is from ARF, source 1 is from ROB
+                        if (src_0 < 64 and src_1 >= 64):
+                            self.RS_Float_Adder[j][i].src_ready = [True, False]
+                            self.RS_Float_Adder[j][i].src_value = [self.ARF.reg_float[src_0-32], -1]
+
+                        # if both are from ROB
+                        if (src_0 >= 64 and src_1 >= 64):
+                            self.RS_Float_Adder[j][i].src_ready = [False, False]
+                            self.RS_Float_Adder[j][i].src_value = [-1, -1]
+
+                        self.RS_Float_Adder[j][i].rdy2exe_cycle = self.cycle + 1
+
+                        flag = True
+                        self.INDEX_FLOAT_ADDER = j + 1
+                        print("go to break")
+                        break
+                if flag:
+                    break
+        # Float multiplication
+        elif inst.inst == 10:
+
+            flag = False
+
+            print("RS number is", len(self.RS_Float_Mul))
+
+            for x in range(self.INDEX_FLOAT_MUL, self.INDEX_FLOAT_MUL + len(self.RS_Float_Mul)):
+                j = x % (len(self.RS_Float_Mul))
+                # print("input j is", j, "length is ", len(self.RS_Float_Mul[j]))
+
+                for i in range(0, len(self.RS_Float_Mul[j])):
+                    print("self.RS_Float_Adder[", j, "][", i, "].in_use is", self.RS_Float_Adder[j][i].in_use)
+                    if self.RS_Float_Mul[j][i].in_use == False:
+
+                        RS_no = i
+
+                        # Unique ID for each instruction. For CDB arbiter, the inst with smaller ID is first served
+                        inst.ID = self.inst_ID_last
+                        self.inst_ID_last = self.inst_ID_last + 1
+
+                        # 2.1 Update ROB
+                        self.ROB[rob_entry_no].reg_number = inst.dest
+                        self.ROB[rob_entry_no].idle = False
+                        self.ROB[rob_entry_no].instruction_index = inst.index
+
+                        # 2.2 Update RAT
+                        # RAT with dest 0-63 points to ARF
+                        # RAT with dest >= 64 ... points to ROB
+                        self.RAT[inst.dest] = 64 + ROB_no
+
+                        # 2.3 Update RS
+                        self.RS_Float_Mul[j][i].in_use = True
+                        self.RS_Float_Mul[j][i].instruction_type = inst.inst
+                        self.RS_Float_Mul[j][i].dest_addr = ROB_no + 64
+                        self.RS_Float_Mul[j][i].dest_value = -1
+                        self.RS_Float_Mul[j][i].instruction_index = inst.index
+                        self.RS_Float_Mul[j][i].instruction_id = inst.ID
+
+                        src_0 = self.RAT[inst.source_0 + 32]
+                        print("src_0 is", src_0)
+
+                        src_1 = self.RAT[inst.source_1 + 32]
+                        print("src_1 is", src_1)
+
+                        self.RS_Float_Mul[j][i].src_addr = [src_0, src_1]
+                        self.RS_Float_Mul[j][i].start_cycle = -1
+                        self.RS_Float_Mul[j][i].finish_cycle = -1
+
+                        # If both source is in ARF
+                        if (src_0 < 64 and src_1 < 64):
+                            self.RS_Float_Mul[j][i].src_ready = [True, True]
+                            self.RS_Float_Mul[j][i].src_value = [self.ARF.reg_float[src_0 - 32],
+                                                                   self.ARF.reg_float[src_1 - 32]]
+
+                        # if source 0 is from ROB, source 1 is from ARF
+                        if (src_0 >= 64 and src_1 < 64):
+                            self.RS_Float_Mul[j][i].src_ready = [False, True]
+                            self.RS_Float_Mul[j][i].src_value = [-1, self.ARF.reg_float[src_1 - 32]]
+
+                        # if source 0 is from ARF, source 1 is from ROB
+                        if (src_0 < 64 and src_1 >= 64):
+                            self.RS_Float_Mul[j][i].src_ready = [True, False]
+                            self.RS_Float_Mul[j][i].src_value = [self.ARF.reg_float[src_0 - 32], -1]
+
+                        # if both are from ROB
+                        if (src_0 >= 64 and src_1 >= 64):
+                            self.RS_Float_Mul[j][i].src_ready = [False, False]
+                            self.RS_Float_Mul[j][i].src_value = [-1, -1]
+
+                        self.RS_Float_Mul[j][i].rdy2exe_cycle = self.cycle + 1
+
+                        flag = True
+                        self.INDEX_FLOAT_MUL= j + 1
+                        print("go to break")
+                        break
+                if flag:
+                    break
+
+
 
         # 2.3 Check if RS has empty entry
         # If no, return -1
         # If yes, update RS, ROB, RAT with instruction
-        #
         # Note: Right now, this function has not decided which RS to be put
 
-        flag = False
-
-        print("RS number is",len(self.RS_Integer))
-
-        for i in range(len(self.RS_Integer)):
-            if self.RS_Integer[i].in_use == False:
-
-                RS_no = i
-
-                # Unique ID for each instruction. For CDB arbiter, the inst with smaller ID is first served
-                inst.ID = self.inst_ID_last
-                self.inst_ID_last = self.inst_ID_last + 1
-
-                # 2.1 Update ROB
-                self.ROB[rob_entry_no].reg_number = inst.dest
-                self.ROB[rob_entry_no].idle = False
-                self.ROB[rob_entry_no].instruction_index = inst.index
-
-                # 2.2 Update RAT
-                # RAT with dest 0-63 points to ARF
-                # RAT with dest >= 64 ... points to ROB
-                self.RAT[inst.dest] = 64 + ROB_no
-
-                # 2.3 Update RS
-                self.RS_Integer[i].in_use = True
-                self.RS_Integer[i].instruction_type = inst.inst
-                self.RS_Integer[i].dest_addr = ROB_no + 64
-                self.RS_Integer[i].dest_value = -1
-                self.RS_Integer[i].instruction_index = inst.index
-                self.RS_Integer[i].instruction_id = inst.ID
-
-                src_0 = self.RAT[inst.source_0]
-                print("src_0 is", src_0)
-                src_1 = self.RAT[inst.source_1]
-                print("src_1 is", src_1)
-
-                self.RS_Integer[i].src_addr = [src_0, src_1]
-                self.RS_Integer[i].start_cycle = -1
-                self.RS_Integer[i].finish_cycle = -1
-
-                # If both source is in ARF
-                if (src_0 < 64 and src_1 < 64):
-                    self.RS_Integer[i].src_ready = [True, True]
-                    self.RS_Integer[i].src_value = [self.ARF.reg_int[src_0], self.ARF.reg_int[src_1]]
-
-                # if source 0 is from ROB, source 1 is from ARF
-                if (src_0 >= 64 and src_1 < 64):
-                    self.RS_Integer[i].src_ready = [False, True]
-                    self.RS_Integer[i].src_value = [-1, self.ARF.reg_int[src_1]]
-
-                # if source 0 is from ARF, source 1 is from ROB
-                if (src_0 < 64 and src_1 >= 64):
-                    self.RS_Integer[i].src_ready = [True, False]
-                    self.RS_Integer[i].src_value = [self.ARF.reg_int[src_0], -1]
-
-                # if both are from ROB
-                if (src_0 >= 64 and src_1 >= 64):
-                    self.RS_Integer[i].src_ready = [False, False]
-                    self.RS_Integer[i].src_value = [-1, -1]
-
-                self.RS_Integer[i].rdy2exe_cycle = self.cycle + 1
-
-                flag = True
-                break
+        print("out of break")
 
         # Issue aborted
         if flag == False:
             return -1
         else:
-            self.ROB_header = (self.ROB_header + 1) % self.ROB_num
+            self.ROB_head = (self.ROB_head + 1) % self.ROB_num
 
 
-        print("ROB[",ROB_no,"]:", self.ROB[ROB_no].idle, self.ROB[ROB_no].reg_number, self.ROB[ROB_no].reg_value,
-              self.ROB[ROB_no].instruction_index)
-        print("RS[",RS_no,"]:", self.RS_Integer[RS_no].in_use, self.RS_Integer[RS_no].dest_addr, self.RS_Integer[RS_no].dest_value, self.RS_Integer[RS_no].src_addr,
-            self.RS_Integer[RS_no].src_ready, self.RS_Integer[RS_no].src_value,self.RS_Integer[RS_no].instruction_index)
-        print("Current cycle is",self.cycle)
+        #
+        # print("ROB[",ROB_no,"]:", self.ROB[ROB_no].idle, self.ROB[ROB_no].reg_number, self.ROB[ROB_no].reg_value,
+        #       self.ROB[ROB_no].instruction_index)
+        # print("RS[", RS_no,"]:", self.RS_Integer_Adder[RS_no].in_use, self.RS_Integer_Adder[RS_no].dest_addr, self.RS_Integer_Adder[RS_no].dest_value, self.RS_Integer_Adder[RS_no].src_addr,
+        #       self.RS_Integer_Adder[RS_no].src_ready, self.RS_Integer_Adder[RS_no].src_value, self.RS_Integer_Adder[RS_no].instruction_index)
+        # print("Current cycle is",self.cycle)
 
         # Add a new line for final output instruction table
         # record Issue cycle

@@ -1,9 +1,9 @@
 class Data_Instruction:
     def __init__(self, inst, dest, offset, source, index, str):
         self.inst = inst
-        self.dest = dest
+        self.F = dest
         self.offset = offset
-        self.source = source
+        self.R = source
         self.index = index
         self.str = str
         self.ID = -1
@@ -144,31 +144,39 @@ def parse_inst():
 
             p = Data_Instruction(operand_construct, dest_operand, offset, source_operand, i, x)
             print("p's inst is", p.inst, "offset is", p.offset)
-
+            inst_list.append(p)
             i+=1
     return inst_list, len(inst_list)
     print("end!")
 
 def ALU_Inst_Type (inst_type):
 
+    # LSQ
     if inst_type == "Ld":
         return 1
     elif inst_type == "Sd":
         return 2
+
+    # Integer Adder
     elif inst_type == "Beq":
         return 3
     elif inst_type == "Bne":
         return 4
     elif inst_type == "Add":
         return 5
-    elif inst_type == "Add.d":
-        return 6
     elif inst_type == "Addi":
         return 7
     elif inst_type == "Sub":
         return 8
+
+    # Float Adder
+    elif inst_type == "Add.d":
+        return 6
     elif inst_type == "Sub.d":
         return 9
+
+
+    # Float Multiplier
     elif inst_type == "Mult.d":
         return 10
     return 0
