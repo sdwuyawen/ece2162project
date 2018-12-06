@@ -28,7 +28,7 @@ Commit
   1. TODO: If the correpsonding ROB value is the old value and cannot be found the RAT table for corresponding R, then we just abandon the old value. 
 
 
-## 1. CDB -> 
+## (Seems done)1. CDB -> 
 buffer (# of halting Register value) -> if buffer is full, the value will be stored in function unit, function unit cannot do write back, a CDB unit (class) must be implemented for all Write Back
 if conflict, the instruction with lower index can be written back first 
 
@@ -55,9 +55,11 @@ Predictor
 5. At the first, there is no value in the predictor. The predicted value will be settled after execution of the branch (Beq/Bne). 
 
 Recover
-RAT -> checkpoint before entering a branch/ only overwrite when the entry contains ROB / -1 
+RAT -> checkpoint before entering a branch/ only overwrite when the current entry contains ROB (The new entries pointing to ARF come from the Commit of instructions before the branch after the branch prediction) / -1 
+
 RS (Head and Tail) -> delete the entries added after branch 
                       (add index to instructuion during ISSUE, if mispredict, delete the entries after the entry corresponding to the                           branch)
+                      
 ROB (Head and Tail) -> delete the entries added after branch 
                       (add index to instructuion during ISSUE, if mispredict, delete the entries after the entry corresponding to the                           branch)
 

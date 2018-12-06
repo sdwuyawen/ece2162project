@@ -146,7 +146,7 @@ class LSQ:
 class Adder:
     # adder_rs_number = 0
 
-    def __init__(self, adder_config):
+    def __init__(self, adder_config, FU_index, rs):
         print("instantiate adder")
         self.config = adder_config
         # self.rs = [ReservationStation() for i in range(self.config.rs_number)]
@@ -160,6 +160,8 @@ class Adder:
         self.active_rs_num = -1
         self.start_cycle = -1
         self.finish_cycle = -1
+        self.fu_index = FU_index # to indicate the ID of this FU. For CDB use
+        self.rs = rs
 
     def print_config(self):
         print("adder config:")
@@ -176,9 +178,9 @@ class Adder:
             print("Adder EXEC:")
             if self.busy == False:
                 print(" Adder got:")
-
                 # for i in range(len(self.config.rs_number)):
                 # for i, rs in enumerate(rs):
+                # Find an entry in my RS that all dependencies are ready for Execution
                 for i in range(len(rs)):
                     if rs[i].in_use == True:
                         if rs[i].src_ready == [True, True] and current_cycle >= rs[i].rdy2exe_cycle:    # start an addition operation
@@ -210,10 +212,10 @@ class Adder:
                     # self.wbing_value = self.rs[self.active_rs_num].dest_value
 
         # Before WB, the processor collect all the WB requests from FUs, and choose the inst with lowest ID
-        elif operation == WRITE_BACK_CHECK:
-            if self.busy == True:
-                if self.wbing_cycle <= current_cycle:
-                    processor.CDB.arbiter_q.append(rs[self.active_rs_num].instruction_id)
+#        elif operation == WRITE_BACK_CHECK:
+#            if self.busy == True:
+#                if self.wbing_cycle <= current_cycle:
+#                    processor.CDB.arbiter_q.append(rs[self.active_rs_num].instruction_id)
 
         elif operation == WRITE_BACK:
             # TODO: for memory load inst, its LSQ entry is cleared after getting value from memory or from previous load in LSQ
@@ -225,42 +227,159 @@ class Adder:
                 print(" Adder.busy:")
                 if self.wbing_cycle == current_cycle:
                     print("     WB cycle:")
-                    self.busy = False
 
-                    # update corresponding ROB entry
-                    print("         update ROB entry ", rs[self.active_rs_num].dest_addr)
-                    rob_entry = rs[self.active_rs_num].dest_addr - 64       # rob entry 0 starts with number 64
-                    processor.ROB[rob_entry].reg_value = rs[self.active_rs_num].dest_value
-                    processor.ROB[rob_entry].value_ready = True
+                    # Successfully drop it to CDB
+                    if processor.CDB.put_to_buffer(rs, self.active_rs_num, self.fu_index, current_cycle) == True:
+                        self.busy = False
+                        # release current RS entry after the WB task has been dropped to CDB
+                        # self.rs[self.active_rs_num].in_use = False
+                        rs[self.active_rs_num].clear()
+                        print("rs[", self.active_rs_num, "] released")
+                        self.active_rs_num = -1
+                    else:
+                        print("Drop to CDB failed. FU is kept busy")
 
-                    # Add current cycle as the WB cycle of corresponding instruction
-                    processor.instruction_final_table[processor.ROB[rob_entry].instruction_index][3] = current_cycle
 
-                    processor.ROB[rob_entry].value_rdy2commit_cycle = current_cycle + 1
-                    print("ROB", self.active_rs_num, "updated to:", processor.ROB[rob_entry].reg_value,
-                          processor.ROB[rob_entry].value_ready,
-                          processor.ROB[rob_entry].value_rdy2commit_cycle)
+class Queue:
+    def __init__(self):
+        self.queue = list()
 
-                    # update all the rs that pending this value
-                    # for i, rs in enumerate(rs):
-                    for i in range(len(rs)):
-                        if rs[i].in_use == True:
-                            for j in [0, 1]:
-                                if rs[i].src_ready[j] == False:
-                                    print("         update RS entry:", i, j)
-                                    print(rs[i].dest_addr, rs[i].src_addr[0], rs[i].src_addr[1])
-                                    if rs[i].src_addr[j] == rs[self.active_rs_num].dest_addr:
-                                        rs[i].src_ready[j] = True
-                                        rs[i].src_addr[j] = -1
-                                        rs[i].src_value[j] = rs[self.active_rs_num].dest_value
-                                        print("             updated RS entry:", i, j)
+    def addtoq(self,dataval):
+    # Insert method to add element
+        if dataval not in self.queue:
+            self.queue.insert(0,dataval)
+            return True
+        return False
 
-                    # release current RS entry
-                    # self.rs[self.active_rs_num].in_use = False
-                    rs[self.active_rs_num].clear()
-                    print("rs[", self.active_rs_num, "] released")
-                    self.active_rs_num = -1
-        # TODO WB
+    # Pop method to remove element
+    def removefromq(self):
+        if len(self.queue)>0:
+            return self.queue.pop()
+        return ("No elements in Queue!")
+
+    def currentsize(self):
+        return len(self.queue)
+
+
+class buffer_entry:
+    inst_id = -1        # Issue sequence of Inst
+    inst_wb_cycle = -1  # wbing cycle, for arbiter
+    dest_addr = -1
+    dest_value = -1          # list cannot be initialized here!
+    fu_index = -1
+    rs = None
+    active_rs_number = -1   # which rs entry I should write to
+
+
+class buffer_FU:
+    def __init__(self, bufferSize):
+        self.name = ""
+        self.maxSize = bufferSize
+        # self.entries = [buffer_entry() for i in range(bufferSize)]
+        self.entries = Queue()
+        # TheQueue.addtoq(self.CDB)
+        # print(TheQueue.removefromq())
+
+
+# Called after all the FUs' WB has been called.
+class CDB:
+    def __init__(self, numOfFUs, bufferSize):
+#        self.arbiter_q = list()
+        self.buffersize = bufferSize
+        # for each FU, there is a buffer of size self.buffersize
+        self.buffer = []        # empty array
+
+        print("-----------------------------")
+
+        for i in range(numOfFUs):       # The buffer is matched with FU by fu.index
+            self.buffer.append(buffer_FU(self.buffersize))
+
+        for i in range(len(self.buffer)):
+            print(self.buffer[i])
+
+        #     for j in range(self.buffersize):
+        #         self.buffer[i][j].dest = -1
+        #         self.buffer[i][j].value = -1
+
+#    def arbiter(self):
+        # print(self.arbiter_q)
+
+    # need to be called by a FU when Write Back
+    def put_to_buffer(self, rs, active_rs_number, fu_index, cycle):
+        print("put_to_buffer")
+
+        temp = buffer_entry()
+
+#        temp.inst_id = rs.instruction_id        # the Issue sequence
+        temp.inst_wb_cycle = cycle
+        temp.inst_id = rs[active_rs_number].instruction_id         # the unique ID of each Issed instruction
+        temp.dest_addr = rs[active_rs_number].dest_addr
+        temp.dest_value = rs[active_rs_number].dest_value
+        temp.fu_index = fu_index
+        temp.rs = rs                             # Get the whole RS table of the FU
+        temp.active_rs_number = active_rs_number
+
+        if self.buffer[fu_index].entries.currentsize() < self.buffer[fu_index].maxSize:
+            self.buffer[fu_index].entries.addtoq(temp)
+            return True
+        else:
+            return False    # The CDB buffer is full. The FU should stall (if not-pipelined)
+
+    # need to be called after WB of all the FUs
+    def arbiter(self, processor):
+        buffer = self.buffer.copy()
+        temp = []
+        # copy the first element in each FU buffer together to select
+        for i in range(len(buffer)):
+            if buffer[i].entries.currentsize() != 0:
+                temp.append(buffer[i].entries.removefromq())
+
+        if len(temp) > 0:
+            temp.sort(key=lambda buffer_entry: buffer_entry.inst_wb_cycle)
+
+            # only keep earliest ones
+            for i in range(len(temp)):
+                if temp[i].inst_wb_cycle != temp[0].inst_wb_cycle:
+                    temp[i].remove()
+
+            # sort again by inst_id
+            temp.sort(key=lambda buffer_entry: buffer_entry.inst_id)
+            # winner is temp(0) now. It is the header of the queue for that FU.
+            # The dequeued element is the type of buffer_entry()
+            self.buffer[temp[0].fu_index].entries.removefromq()
+            # Todo: Write Back the temp[0] to RS (of FU temp[0].fu_index) and ROB
+
+            # DO REAL Write Back Now
+            rs = temp[0].rs
+            current_cycle = processor.cycle
+
+            # update corresponding ROB entry
+            print("         update ROB entry ", temp[0].dest_addr)
+            rob_entry = temp[0].dest_addr - 64  # rob entry 0 starts with number 64
+            processor.ROB[rob_entry].reg_value = temp[0].dest_value
+            processor.ROB[rob_entry].value_ready = True
+
+            # Add current cycle as the WB cycle of corresponding instruction
+            processor.instruction_final_table[processor.ROB[rob_entry].instruction_index][3] = current_cycle
+
+            processor.ROB[rob_entry].value_rdy2commit_cycle = current_cycle + 1
+            print("ROB", rob_entry, "updated to:", processor.ROB[rob_entry].reg_value,
+                  processor.ROB[rob_entry].value_ready,
+                  processor.ROB[rob_entry].value_rdy2commit_cycle)
+
+            # update all the rs that pending this value
+            # for i, rs in enumerate(rs):
+            for i in range(len(rs)):
+                if rs[i].in_use == True:
+                    for j in [0, 1]:
+                        if rs[i].src_ready[j] == False:
+                            print("         update RS entry:", i, j)
+                            print(rs[i].dest_addr, rs[i].src_addr[0], rs[i].src_addr[1])
+                            if rs[i].src_addr[j] == temp[0].dest_addr:
+                                rs[i].src_ready[j] = True
+                                rs[i].src_addr[j] = -1
+                                rs[i].src_value[j] = temp[0].dest_value
+                                print("             updated RS entry:", i, j)
 
 
 class ARF:
@@ -303,11 +422,6 @@ class ROB:
 
 # class Issue:
 #     def __init__(self, processor):
-
-
-class CDB:
-    def __init__(self):
-        self.arbiter_q = list()
 
 
 class Processor(object):
@@ -376,8 +490,13 @@ class Processor(object):
 
         # init adder
         print("----------------------------------------")
+<<<<<<< HEAD
         print(self.RS_Integer_Adder)
         self.adder = Adder(self.config.adder)
+=======
+        print(self.RS_Integer)
+        self.adder = Adder(self.config.adder, 0, self.RS_Integer)
+>>>>>>> f6f3a9a02f1c35c5ef373ac9044bf23a0ead3c18
         self.adder.print_config()
         # self.adder.operation(self.cycle)
 
@@ -388,7 +507,12 @@ class Processor(object):
         # Instruction unique ID
         self.inst_ID_last = 0
 
-        self.CDB = CDB()
+        # TODO: number of FUs, each buffer size
+        self.CDB = CDB(2, 1)
+
+        # TheQueue = Queue()
+        # TheQueue.addtoq(self.CDB)
+        # print(TheQueue.removefromq())
 
     def clock(self):
         self.cycle += 1
@@ -567,10 +691,17 @@ class Processor(object):
                         inst.ID = self.inst_ID_last
                         self.inst_ID_last = self.inst_ID_last + 1
 
+<<<<<<< HEAD
                         # 2.1 Update ROB
                         self.ROB[rob_entry_no].reg_number = inst.dest
                         self.ROB[rob_entry_no].idle = False
                         self.ROB[rob_entry_no].instruction_index = inst.index
+=======
+                src_0 = self.RAT[inst.source_0]
+                print("src_0 is", src_0)
+                print("src_1 is", inst.source_1)
+                src_1 = self.RAT[inst.source_1]
+>>>>>>> f6f3a9a02f1c35c5ef373ac9044bf23a0ead3c18
 
                         # 2.2 Update RAT
                         # RAT with dest 0-63 points to ARF
@@ -949,15 +1080,17 @@ class Processor(object):
         return 0
 
     def write_back_check(self):
-        self.adder.operation(self.cycle, WRITE_BACK_CHECK, self)
-        print("CDB Queue:")
-        print(self.CDB.arbiter_q)
+        self.adder.operation(self.cycle, WRITE_BACK_CHECK, self)    # inform CDB that adder wants to write back
+        print("CDB Queue:-----------------------------------------------------")
+#        print(self.CDB.arbiter_q)
 
     def write_back(self):
         print("++++++++++++++++++++++++++++++++")
         print(self)
         self.write_back_check()
         self.adder.operation(self.cycle, WRITE_BACK, self)
+
+        self.CDB.arbiter(self)
 
     def execs(self):
         self.adder.operation(self.cycle, EXEC, self)
