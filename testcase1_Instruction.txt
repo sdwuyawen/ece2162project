@@ -1,5 +1,4 @@
-Add R0, R1, R2
-Sub.d F1, F0, F14
-Addi R3, R0, 35
-Beq R1, R3, 4
-Ld F4, 8(R3)
+Add R1, R0, R2
+Addi R1, R2, 35
+Sub R1, R3, R5
+Add R1, R2, R6

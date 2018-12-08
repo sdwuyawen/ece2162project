@@ -99,7 +99,7 @@ def main():
 
         processor.clock()
 
-    output_txt(processor.instruction_final_table, processor.ARF.reg_int)
+    # output_txt(processor.instruction_final_table, processor.ARF.reg_int)
 
     # print("-----------------------------------------------------------------")
     # processor.issue()
