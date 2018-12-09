@@ -252,7 +252,10 @@ class Adder:
             print("-------------",self.fu_index,"Adder WB End:----------------\n")
 
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> b316ce325dc912957727b41f73e0f411c1f1a639
 class Queue:
     def __init__(self):
         self.queue = list()
@@ -268,10 +271,132 @@ class Queue:
     def removefromq(self):
         if len(self.queue)>0:
             return self.queue.pop()
+
         return ("No elements in Queue!")
 
     def currentsize(self):
         return len(self.queue)
+
+    # Only query, not dequeue
+    def queryfirstelement(self):
+        if self.currentsize() > 0:
+            return self.queue[0]
+
+
+class FUPipeLineInfo:
+    wbing_cycle = -1
+    active_rs_num = -1
+    start_cycle = -1
+    finish_cycle = -1
+
+class PipelinedFU:
+    # adder_rs_number = 0
+
+    def __init__(self, adder_config, FU_index, rs, function):
+        print("instantiate Pipielined FU")
+        self.config = adder_config
+        # self.rs = [ReservationStation() for i in range(self.config.rs_number)]
+        # for i in range(0, 3):
+        # for i, rs in enumerate(self.rs):
+        #     self.rs.index = i
+        # print("rs number", rs.__len__())
+        # self.busy = False
+
+        self.fu_index = FU_index # to indicate the ID of this FU. For CDB use
+        self.rs = rs
+        self.exeQueue = Queue()
+        self.function = function       # 1 for sum, 2 for mul
+
+    def print_config(self):
+        print("Pipielined FU config:")
+        print("# of rs /", "Cycles in EX /", "Cycles in Mem /", "# of FUs /")
+        print(self.config.name, self.config.rs_number, self.config.ex_cycles, self.config.mem_cycles, self.config.fu_number)
+
+    def operation(self, current_cycle, operation, processor):
+        # print(whoami())
+        print(processor)
+        rs = self.rs
+        print("Pipielined FU operation in cycle:", current_cycle)
+
+        # print("processor cycle: ", current_cycle)
+        if operation == EXEC:
+            print("--------------",self.fu_index,"Pipielined FU EXEC Begin:-------------------")
+            if True:        # Alway not busy
+                print(" Pipelined FU got:")
+                # for i in range(len(self.config.rs_number)):
+                # for i, rs in enumerate(rs):
+                # Find an entry in my RS that all dependencies are ready for Execution
+                for i in range(len(rs)):
+                    print("rs[",i, "] is in use",rs[i].in_use)
+                    if rs[i].in_use == True:
+                        if rs[i].src_ready == [True, True] and current_cycle >= rs[i].rdy2exe_cycle:    # start an addition operation
+                            # Add current cycle as the execution cycle of corresponding instruction
+                            processor.instruction_final_table[rs[i].instruction_index][1] = current_cycle
+
+                            # self.busy = True
+                            print("     Adder occupied:", rs[i].instruction_type)
+
+                            pipelineinfo = FUPipeLineInfo()
+                            # rs[i].src_ready = [False, False]
+                            pipelineinfo.start_cycle = current_cycle
+                            # print(self.config.ex_cycles)
+                            pipelineinfo.finish_cycle = current_cycle + self.config.ex_cycles
+                            pipelineinfo.active_rs_num = rs[i].index
+                            print("active_rs_num = ", pipelineinfo.active_rs_num)
+                            if self.function == 1:          # Add
+                                rs[i].dest_value = rs[i].src_value[0] + rs[i].src_value[1]
+                            elif self.function == 2:        # Multiply
+                                rs[i].dest_value = rs[i].src_value[0] * rs[i].src_value[1]
+                            pipelineinfo.wbing_cycle = pipelineinfo.finish_cycle
+                            print("start cycle:", pipelineinfo.start_cycle)
+                            print("finish cycle:", pipelineinfo.finish_cycle)
+
+                            # ENQUEUE
+                            self.exeQueue.addtoq(pipelineinfo)
+
+            print("--------------",self.fu_index,"Pipielined FU EXEC End:-------------------\n")
+            # elif self.busy == True:
+                # print("Adder busy:")
+                # if self.finish_cycle == current_cycle:  # exactly the cycle to write back
+                    # self.busy = False
+                    # print("adder:")
+                    # print("WBing in cycle: ", current_cycle)
+                    # self.rs[self.active_rs_num].in_use = False
+                    # self.active_rs_num = -1
+                    # self.wbing_cycle = current_cycle + 1
+                    # self.wbing_value = self.rs[self.active_rs_num].dest_value
+
+        # Before WB, the processor collect all the WB requests from FUs, and choose the inst with lowest ID
+#        elif operation == WRITE_BACK_CHECK:
+#            if self.busy == True:
+#                if self.wbing_cycle <= current_cycle:
+#                    processor.CDB.arbiter_q.append(rs[self.active_rs_num].instruction_id)
+
+        elif operation == WRITE_BACK:
+            # TODO: for memory load inst, its LSQ entry is cleared after getting value from memory or from previous load in LSQ
+            # TODO: for memory store inst STR R1, R2(0), its LSQ entry is enqueued when the STR is issued, and dequeued when the commit is finished
+            # The memory address is calculated in Ex stage. When R1 is ready to the LSQ, it broadcasts to all LSQ entry (Load) pending the memory address R2+0.
+            # When R2 is ready, the memory address is calculated, and it broadcasts to all LSQ entry (Load) pending the memory address R2+0
+            print("\n-------------",self.fu_index,"Pipielined FU WB Begin:----------------")
+
+            if self.exeQueue.currentsize() > 0:
+                if self.exeQueue.queryfirstelement().wbing_cycle == current_cycle:
+                    print("     WB cycle:", current_cycle)
+                    currentExe = self.exeQueue.queryfirstelement()
+                    # Successfully drop it to CDB
+                    if processor.CDB.put_to_buffer(rs, currentExe.active_rs_num, self.fu_index, current_cycle) == True:
+                        self.busy = False
+                        # release current RS entry after the WB task has been dropped to CDB
+                        # self.rs[self.active_rs_num].in_use = False
+                        rs[self.active_rs_num].clear()
+                        print("rs[", self.active_rs_num, "] released")
+                        # self.active_rs_num = -1
+
+                        # remove this execution in FU, as it has been write back
+                        self.exeQueue.removefromq()
+                    else:
+                        print("Drop to CDB failed. FU is kept busy")
+            print("-------------", self.fu_index, "Pipielined FU WB End:----------------\n")
 
 
 class buffer_entry:
@@ -527,6 +652,8 @@ class Processor(object):
         # print("RS integer adder", self.RS_Integer_Adder)
 
         self.Integer_Adder = [Adder(self.config.adder, i, self.RS_Integer_Adder[i]) for i in range(self.config.adder.fu_number)]
+        self.FP_Adder = [PipelinedFU(self.config.fpadder, i, self.RS_Float_Adder[i], 1) for i in range(self.config.fpadder.fu_number)]
+        self.FP_Mul = [PipelinedFU(self.config.fpmul, i, self.RS_Float_Mul[i], 2) for i in range(self.config.fpmul.fu_number)]
 
         # self.adder.print_config()
         # self.adder.operation(self.cycle)
