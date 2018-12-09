@@ -1,3 +1,4 @@
 Add R1, R0, R2
-Sub R4, R2, R3
+Sub R4, R1, R3
 Addi R5, R6, -35
+Sub R8, R5, R1

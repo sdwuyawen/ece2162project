@@ -5,7 +5,7 @@ import array
 #import numpy
 
 from parse import *
-
+from copy import deepcopy
 from Parse_Inst import *
 
 
@@ -252,10 +252,6 @@ class Adder:
             print("-------------",self.fu_index,"Adder WB End:----------------\n")
 
 
-<<<<<<< HEAD
-
-=======
->>>>>>> b316ce325dc912957727b41f73e0f411c1f1a639
 class Queue:
     def __init__(self):
         self.queue = list()
@@ -457,32 +453,42 @@ class CDB:
 
         if self.buffer[fu_index].entries.currentsize() < self.buffer[fu_index].maxSize:
             self.buffer[fu_index].entries.addtoq(temp)
+            print("inst id is",rs[active_rs_number].instruction_id,"fu_index is", fu_index)
             return True
         else:
             return False    # The CDB buffer is full. The FU should stall (if not-pipelined)
 
     # need to be called after WB of all the FUs
     def arbiter(self, processor):
-        buffer = self.buffer.copy()
+        buffer = deepcopy(self.buffer)
         temp = []
         # copy the first element in each FU buffer together to select
+
         for i in range(len(buffer)):
+            print("loop buffer length is ", buffer[i].entries.currentsize())
+            print("loop self buffer length is ", self.buffer[i].entries.currentsize())
             if buffer[i].entries.currentsize() != 0:
                 temp.append(buffer[i].entries.removefromq())
 
+        print("length of temp is",len(temp))
+        # print("before buffer length is ", self.buffer[1].entries.currentsize())
         if len(temp) > 0:
             temp.sort(key=lambda buffer_entry: buffer_entry.inst_wb_cycle)
 
             # only keep earliest ones
             for i in range(len(temp)):
                 if temp[i].inst_wb_cycle != temp[0].inst_wb_cycle:
-                    temp[i].remove()
+                    print("prepare to remove")
+                    temp.remove(temp[i])
 
             # sort again by inst_id
             temp.sort(key=lambda buffer_entry: buffer_entry.inst_id)
             # winner is temp(0) now. It is the header of the queue for that FU.
             # The dequeued element is the type of buffer_entry()
+            print("fu_index is", temp[0].fu_index)
+
             self.buffer[temp[0].fu_index].entries.removefromq()
+
             # Todo: Write Back the temp[0] to RS (of FU temp[0].fu_index) and ROB
 
             # DO REAL Write Back Now
@@ -496,6 +502,7 @@ class CDB:
             processor.ROB[rob_entry].value_ready = True
 
             # Add current cycle as the WB cycle of corresponding instruction
+            print("processor.ROB[rob_entry].instruction_index is",processor.ROB[rob_entry].instruction_index)
             processor.instruction_final_table[processor.ROB[rob_entry].instruction_index][3] = current_cycle
 
             processor.ROB[rob_entry].value_rdy2commit_cycle = current_cycle + 1
@@ -524,12 +531,13 @@ class CDB:
                             for j in [0, 1]:
                                 if rs[k][i].src_ready[j] == False:
                                     print("         update RS_Integer_Adder entry: i is", i, "j is", j)
-                                    print(rs[k][i].dest_addr, rs[k][i].src_addr[0], rs[k][i].src_addr[1])
+                                    print("         temp dest address is ",temp[0].dest_addr)
+                                    print("         ",rs[k][i].dest_addr, rs[k][i].src_addr[0], rs[k][i].src_addr[1])
                                     if rs[k][i].src_addr[j] == temp[0].dest_addr:
                                         rs[k][i].src_ready[j] = True
                                         rs[k][i].src_addr[j] = -1
                                         rs[k][i].src_value[j] = temp[0].dest_value
-                                        print("             updated RS entry:", i, j)
+                                        print("             updated RS entry:",k, i, j)
 
 
 
@@ -652,8 +660,8 @@ class Processor(object):
         # print("RS integer adder", self.RS_Integer_Adder)
 
         self.Integer_Adder = [Adder(self.config.adder, i, self.RS_Integer_Adder[i]) for i in range(self.config.adder.fu_number)]
-        self.FP_Adder = [PipelinedFU(self.config.fpadder, i, self.RS_Float_Adder[i], 1) for i in range(self.config.fpadder.fu_number)]
-        self.FP_Mul = [PipelinedFU(self.config.fpmul, i, self.RS_Float_Mul[i], 2) for i in range(self.config.fpmul.fu_number)]
+        self.FP_Adder = [PipelinedFU(self.config.fpadder, j, self.RS_Float_Adder[i], 1) for j in range(self.config.adder.fu_number,self.config.adder.fu_number+self.config.fpadder.fu_number)]
+        self.FP_Mul = [PipelinedFU(self.config.fpmul, k, self.RS_Float_Mul[i], 2) for k in range(self.config.fpadder.fu_number, self.config.fpadder.fu_number+self.config.fpmul.fu_number)]
 
         # self.adder.print_config()
         # self.adder.operation(self.cycle)
@@ -666,7 +674,7 @@ class Processor(object):
         self.inst_ID_last = 0
 
         # TODO: number of FUs, each buffer size
-        self.CDB = CDB(2, 1)
+        self.CDB = CDB(self.config.adder.fu_number, 1)
 
         # TheQueue = Queue()
         # TheQueue.addtoq(self.CDB)
@@ -769,7 +777,7 @@ class Processor(object):
                         self.RS_LSQ[j][i].offset = inst.offset
                         self.RS_LSQ[j][i].instruction_index = inst.index
                         self.RS_LSQ[j][i].instruction_id = ID
-                        ID+=1
+                        ID=ID+1
 
                         src_F = self.RAT[inst.F+32]
                         print("src_0 is", src_F)
@@ -833,6 +841,7 @@ class Processor(object):
 
         print("inst index is", inst.inst)
 
+        # BEN and BEQ
         if inst.inst == 3 or inst.inst == 4:
             flag = False
 
@@ -874,8 +883,8 @@ class Processor(object):
                         self.RS_Integer_Adder[j][i].dest_addr = ROB_no + 64
                         self.RS_Integer_Adder[j][i].dest_value = -1
                         self.RS_Integer_Adder[j][i].instruction_index = inst.index
-                        self.RS_Integer_Adder[j][i].instruction_id = ID
-                        ID+=1
+                        self.RS_Integer_Adder[j][i].instruction_id = inst.ID
+
 
                         src_0 = self.RAT[inst.source_0]
                         print("src_0 is", src_0)
@@ -953,8 +962,7 @@ class Processor(object):
                         self.RS_Integer_Adder[j][i].dest_addr = ROB_no + 64
                         self.RS_Integer_Adder[j][i].dest_value = -1
                         self.RS_Integer_Adder[j][i].instruction_index = inst.index
-                        self.RS_Integer_Adder[j][i].instruction_id = ID
-                        ID+=1
+                        self.RS_Integer_Adder[j][i].instruction_id = inst.ID
 
                         src_0 = self.RAT[inst.source_0]
                         print("src_0 is", src_0)
@@ -1053,8 +1061,7 @@ class Processor(object):
                         self.RS_Float_Adder[j][i].dest_addr = ROB_no + 64
                         self.RS_Float_Adder[j][i].dest_value = -1
                         self.RS_Float_Adder[j][i].instruction_index = inst.index
-                        self.RS_Float_Adder[j][i].instruction_id = ID
-                        ID+=1
+                        self.RS_Float_Adder[j][i].instruction_id = inst.ID
 
                         src_0 = self.RAT[inst.source_0+32]
                         print("src_0 is", src_0)
@@ -1132,8 +1139,7 @@ class Processor(object):
                         self.RS_Float_Mul[j][i].dest_addr = ROB_no + 64
                         self.RS_Float_Mul[j][i].dest_value = -1
                         self.RS_Float_Mul[j][i].instruction_index = inst.index
-                        self.RS_Float_Mul[j][i].instruction_id = ID
-                        ID+=1
+                        self.RS_Float_Mul[j][i].instruction_id = inst.ID
 
                         src_0 = self.RAT[inst.source_0 + 32]
                         print("src_0 is", src_0)
@@ -1231,6 +1237,10 @@ class Processor(object):
         print("++++++++++++++++++++++++++++++++")
         for i in range(self.config.adder.fu_number):
             self.Integer_Adder[i].operation(self.cycle, WRITE_BACK, self)
+        # for i in range(self.config.fpadder.fu_number):
+        #     self.FP_Adder[i].operation(self.cycle, WRITE_BACK, self)
+        # for i in range(self.config.fpmul.fu_number):
+        #     self.FP_Mul[i].operation(self.cycle, WRITE_BACK, self)
         print("-----------CDB Begin------------")
         self.CDB.arbiter(self)
         print("-----------CDB End--------------")
@@ -1239,6 +1249,10 @@ class Processor(object):
 
         for i in range(self.config.adder.fu_number):
             self.Integer_Adder[i].operation(self.cycle, EXEC, self)
+        # for i in range(self.config.fpadder.fu_number):
+        #     self.FP_Adder[i].operation(self.cycle, EXEC, self)
+        # for i in range(self.config.fpmul.fu_number):
+        #     self.FP_Mul[i].operation(self.cycle, EXEC, self)
 
     def commit(self):  # pc 1103
         print("-------------Commit begin:----------------")
