@@ -93,13 +93,12 @@ def main():
 
     for i in range(0, 10):
         processor.issue()
-        processor.execs()
         processor.write_back()
+        processor.execs()
         processor.commit()
-
         processor.clock()
 
-    # output_txt(processor.instruction_final_table, processor.ARF.reg_int)
+    output_txt(processor.instruction_final_table, processor.ARF.reg_int)
 
     # print("-----------------------------------------------------------------")
     # processor.issue()
@@ -159,7 +158,7 @@ def main():
     # processor.write_back()
     # processor.commit()
     #
-    # output_txt(processor.instruction_final_table)
+    #output_txt(processor.instruction_final_table)
 
 
 if __name__ == '__main__':

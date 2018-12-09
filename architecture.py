@@ -192,7 +192,7 @@ class Adder:
                         if rs[i].src_ready == [True, True] and current_cycle >= rs[i].rdy2exe_cycle:    # start an addition operation
                             # Add current cycle as the execution cycle of corresponding instruction
                             processor.instruction_final_table[rs[i].instruction_index][1] = current_cycle
-
+                            print("inst index is", rs[i].instruction_index)
                             self.busy = True
                             print("     Adder occupied:", rs[i].instruction_type)
                             # rs[i].src_ready = [False, False]
@@ -201,10 +201,14 @@ class Adder:
                             self.finish_cycle = current_cycle + self.config.ex_cycles
                             self.active_rs_num = rs[i].index
                             print("active_rs_num = ", self.active_rs_num)
-                            rs[i].dest_value = rs[i].src_value[0] + rs[i].src_value[1]
+                            if rs[i].instruction_type == 8:
+                                rs[i].dest_value = rs[i].src_value[0] - rs[i].src_value[1]
+                            else:
+                                rs[i].dest_value = rs[i].src_value[0] + rs[i].src_value[1]
                             self.wbing_cycle = self.finish_cycle
                             print("start cycle:", self.start_cycle)
                             print("finish cycle:", self.finish_cycle)
+                            break
             print("--------------",self.fu_index,"Adder EXEC End:-------------------\n")
             # elif self.busy == True:
                 # print("Adder busy:")
@@ -239,12 +243,15 @@ class Adder:
                         self.busy = False
                         # release current RS entry after the WB task has been dropped to CDB
                         # self.rs[self.active_rs_num].in_use = False
+                        print("fu index is ", self.fu_index,"active rs number is ",self.active_rs_num)
                         rs[self.active_rs_num].clear()
                         print("rs[", self.active_rs_num, "] released")
                         self.active_rs_num = -1
                     else:
                         print("Drop to CDB failed. FU is kept busy")
             print("-------------",self.fu_index,"Adder WB End:----------------\n")
+
+
 
 class Queue:
     def __init__(self):
@@ -307,10 +314,8 @@ class CDB:
         #         self.buffer[i][j].dest = -1
         #         self.buffer[i][j].value = -1
 
-#    def arbiter(self):
-        # print(self.arbiter_q)
 
-    # need to be called by a FU when Write Back
+
     def put_to_buffer(self, rs, active_rs_number, fu_index, cycle):
         print("put_to_buffer")
 
@@ -376,32 +381,36 @@ class CDB:
             # update all the rs that pending this value
             # for i, rs in enumerate(rs):
             # for j in range(len(processor.RS_Integer_Adder))
-            if rs[0].id == 1:
-                rs = processor.RS_Integer_Adder
-            elif rs[0].id == 2:
-                rs = processor.RS_Float_Adder
-            elif rs[0].id == 3:
-                rs = processor.RS_Float_Mul
-            else:
-                rs = processor.RS_LSQ
+            # if rs[0].id == 1:
+            #     rs = processor.RS_Integer_Adder
+            # elif rs[0].id == 2:
+            #     rs = processor.RS_Float_Adder
+            # elif rs[0].id == 3:
+            #     rs = processor.RS_Float_Mul
+            # else:
+            #     rs = processor.RS_LSQ
 
-            for k in range(len(rs)):
-                for i in range(len(rs[k])):
-                    if rs[k][i].in_use == True:
-                        for j in [0, 1]:
-                            if rs[k][i].src_ready[j] == False:
-                                print("         update RS entry:", i, j)
-                                print(rs[k][i].dest_addr, rs[k][i].src_addr[0], rs[k][i].src_addr[1])
-                                if rs[k][i].src_addr[j] == temp[0].dest_addr:
-                                    rs[k][i].src_ready[j] = True
-                                    rs[k][i].src_addr[j] = -1
-                                    rs[k][i].src_value[j] = temp[0].dest_value
-                                    print("             updated RS entry:", i, j)
+            # TODO: still need further update on different rs
+            list = [processor.RS_Integer_Adder, processor.RS_Float_Adder, processor.RS_Float_Mul, processor.RS_LSQ]
+            for rs in list:
+                for k in range(len(rs)):
+                    for i in range(len(rs[k])):
+                        if rs[k][i].in_use == True:
+                            for j in [0, 1]:
+                                if rs[k][i].src_ready[j] == False:
+                                    print("         update RS_Integer_Adder entry: i is", i, "j is", j)
+                                    print(rs[k][i].dest_addr, rs[k][i].src_addr[0], rs[k][i].src_addr[1])
+                                    if rs[k][i].src_addr[j] == temp[0].dest_addr:
+                                        rs[k][i].src_ready[j] = True
+                                        rs[k][i].src_addr[j] = -1
+                                        rs[k][i].src_value[j] = temp[0].dest_value
+                                        print("             updated RS entry:", i, j)
+
 
 
 class ARF:
     def __init__(self, int_val, float_val):
-        self.reg_int = array.array('L') # unsigned long
+        self.reg_int = array.array('i') # unsigned long
         for i in range(32):
             self.reg_int.append(int_val[i])
         print("ARF: int val:", self.reg_int)
@@ -481,16 +490,15 @@ class Processor(object):
             self.RS_LSQ = [[LSQ() for i in range(self.config.ldst.rs_number)] for i in range(self.config.ldst.fu_number)]
             for i in range(self.config.ldst.fu_number):
                 for j in range(self.config.ldst.rs_number):
-                    self.RS_LSQ[i][j].index = i
+                    self.RS_LSQ[i][j].index = j
                     self.RS_LSQ[i][j].id = 4
 
         for j in range(self.config.adder.fu_number):
             # int_adder_list =
             self.RS_Integer_Adder = [[ReservationStation() for i in range(self.config.adder.rs_number)] for i in range(self.config.adder.fu_number)]
             for i in range(self.config.adder.fu_number):
-
                 for j in range(self.config.adder.rs_number):
-                    self.RS_Integer_Adder[i][j].index = i
+                    self.RS_Integer_Adder[i][j].index = j
                     self.RS_Integer_Adder[i][j].id = 1
 
         for j in range(self.config.fpadder.fu_number):
@@ -498,7 +506,7 @@ class Processor(object):
             self.RS_Float_Adder = [[ReservationStation() for i in range(self.config.fpadder.rs_number)] for i in range(self.config.fpadder.fu_number)]
             for i in range(self.config.fpadder.fu_number):
                 for j in range(self.config.fpadder.rs_number):
-                    self.RS_Float_Adder[i][j].index = i
+                    self.RS_Float_Adder[i][j].index = j
                     self.RS_Float_Adder[i][j].id = 2
 
         for j in range(self.config.fpadder.fu_number):
@@ -506,7 +514,7 @@ class Processor(object):
             self.RS_Float_Mul = [[ReservationStation() for i in range(self.config.fpmul.rs_number)] for i in range(self.config.fpmul.fu_number)]
             for i in range(self.config.fpmul.fu_number):
                 for j in range(self.config.fpmul.rs_number):
-                    self.RS_Float_Mul[i][j].index = i
+                    self.RS_Float_Mul[i][j].index = j
                     self.RS_Float_Mul[i][j].id = 3
 
 
@@ -597,6 +605,7 @@ class Processor(object):
         flag = False
         ROB_no = -1
         RS_no = -1
+        ID = 0
 
         # Load/Store inst
         if inst.inst == 1 or inst.inst == 2:
@@ -632,7 +641,8 @@ class Processor(object):
                         self.RS_LSQ[j][i].instruction_type = inst.inst
                         self.RS_LSQ[j][i].offset = inst.offset
                         self.RS_LSQ[j][i].instruction_index = inst.index
-                        self.RS_LSQ[j][i].instruction_id = inst.ID
+                        self.RS_LSQ[j][i].instruction_id = ID
+                        ID+=1
 
                         src_F = self.RAT[inst.F+32]
                         print("src_0 is", src_F)
@@ -737,7 +747,8 @@ class Processor(object):
                         self.RS_Integer_Adder[j][i].dest_addr = ROB_no + 64
                         self.RS_Integer_Adder[j][i].dest_value = -1
                         self.RS_Integer_Adder[j][i].instruction_index = inst.index
-                        self.RS_Integer_Adder[j][i].instruction_id = inst.ID
+                        self.RS_Integer_Adder[j][i].instruction_id = ID
+                        ID+=1
 
                         src_0 = self.RAT[inst.source_0]
                         print("src_0 is", src_0)
@@ -815,7 +826,8 @@ class Processor(object):
                         self.RS_Integer_Adder[j][i].dest_addr = ROB_no + 64
                         self.RS_Integer_Adder[j][i].dest_value = -1
                         self.RS_Integer_Adder[j][i].instruction_index = inst.index
-                        self.RS_Integer_Adder[j][i].instruction_id = inst.ID
+                        self.RS_Integer_Adder[j][i].instruction_id = ID
+                        ID+=1
 
                         src_0 = self.RAT[inst.source_0]
                         print("src_0 is", src_0)
@@ -914,7 +926,8 @@ class Processor(object):
                         self.RS_Float_Adder[j][i].dest_addr = ROB_no + 64
                         self.RS_Float_Adder[j][i].dest_value = -1
                         self.RS_Float_Adder[j][i].instruction_index = inst.index
-                        self.RS_Float_Adder[j][i].instruction_id = inst.ID
+                        self.RS_Float_Adder[j][i].instruction_id = ID
+                        ID+=1
 
                         src_0 = self.RAT[inst.source_0+32]
                         print("src_0 is", src_0)
@@ -992,7 +1005,8 @@ class Processor(object):
                         self.RS_Float_Mul[j][i].dest_addr = ROB_no + 64
                         self.RS_Float_Mul[j][i].dest_value = -1
                         self.RS_Float_Mul[j][i].instruction_index = inst.index
-                        self.RS_Float_Mul[j][i].instruction_id = inst.ID
+                        self.RS_Float_Mul[j][i].instruction_id = ID
+                        ID+=1
 
                         src_0 = self.RAT[inst.source_0 + 32]
                         print("src_0 is", src_0)
@@ -1080,22 +1094,22 @@ class Processor(object):
         # Issue success
         return 0
 
-    def write_back_check(self):
-        for i in range (self.config.adder.fu_number):
-            self.Integer_Adder[i].operation(self.cycle, WRITE_BACK_CHECK, self)    # inform CDB that adder wants to write back
-            print("CDB Queue:-----------------------------------------------------")
+    # def write_back_check(self):
+    #     for i in range (self.config.adder.fu_number):
+    #         self.Integer_Adder[i].operation(self.cycle, WRITE_BACK_CHECK, self)    # inform CDB that adder wants to write back
+    #         print("CDB Queue:-----------------------------------------------------")
 #       print(self.CDB.arbiter_q)
 
     def write_back(self):
         print("++++++++++++++++++++++++++++++++")
-        print(self)
-        self.write_back_check()
         for i in range(self.config.adder.fu_number):
             self.Integer_Adder[i].operation(self.cycle, WRITE_BACK, self)
-
-            self.CDB.arbiter(self)
+        print("-----------CDB Begin------------")
+        self.CDB.arbiter(self)
+        print("-----------CDB End--------------")
 
     def execs(self):
+
         for i in range(self.config.adder.fu_number):
             self.Integer_Adder[i].operation(self.cycle, EXEC, self)
 
@@ -1112,6 +1126,7 @@ class Processor(object):
             if rob_H.reg_number > 31:
                 self.ARF.reg_float[rob_H.reg_number % 32] = rob_H.reg_value  # update ARF to the latest value in ROB
             else:
+                print()
                 self.ARF.reg_int[rob_H.reg_number % 32] = rob_H.reg_value  # update ARF to the latest value in ROB
             self.ROB[self.ROB_tail].clear()  # remove current ROB head entry
             self.ROB_tail = (self.ROB_tail + 1) % 64  # update ROB header to the next one
