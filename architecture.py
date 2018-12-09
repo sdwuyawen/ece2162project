@@ -283,7 +283,7 @@ class FUPipeLineInfo:
 class PipelinedFU:
     # adder_rs_number = 0
 
-    def __init__(self, adder_config, FU_index, rs):
+    def __init__(self, adder_config, FU_index, rs, function):
         print("instantiate Pipielined FU")
         self.config = adder_config
         # self.rs = [ReservationStation() for i in range(self.config.rs_number)]
@@ -296,6 +296,7 @@ class PipelinedFU:
         self.fu_index = FU_index # to indicate the ID of this FU. For CDB use
         self.rs = rs
         self.exeQueue = Queue()
+        self.function = function       # 1 for sum, 2 for mul
 
     def print_config(self):
         print("Pipielined FU config:")
@@ -333,7 +334,10 @@ class PipelinedFU:
                             pipelineinfo.finish_cycle = current_cycle + self.config.ex_cycles
                             pipelineinfo.active_rs_num = rs[i].index
                             print("active_rs_num = ", pipelineinfo.active_rs_num)
-                            rs[i].dest_value = rs[i].src_value[0] + rs[i].src_value[1]
+                            if self.function == 1:          # Add
+                                rs[i].dest_value = rs[i].src_value[0] + rs[i].src_value[1]
+                            elif self.function == 2:        # Multiply
+                                rs[i].dest_value = rs[i].src_value[0] * rs[i].src_value[1]
                             pipelineinfo.wbing_cycle = pipelineinfo.finish_cycle
                             print("start cycle:", pipelineinfo.start_cycle)
                             print("finish cycle:", pipelineinfo.finish_cycle)
@@ -638,6 +642,8 @@ class Processor(object):
         # print("RS integer adder", self.RS_Integer_Adder)
 
         self.Integer_Adder = [Adder(self.config.adder, i, self.RS_Integer_Adder[i]) for i in range(self.config.adder.fu_number)]
+        self.FP_Adder = [PipelinedFU(self.config.fpadder, i, self.RS_Float_Adder[i], 1) for i in range(self.config.fpadder.fu_number)]
+        self.FP_Mul = [PipelinedFU(self.config.fpmul, i, self.RS_Float_Mul[i], 2) for i in range(self.config.fpmul.fu_number)]
 
         # self.adder.print_config()
         # self.adder.operation(self.cycle)
