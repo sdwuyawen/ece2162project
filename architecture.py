@@ -191,7 +191,8 @@ class Adder:
                     if rs[i].in_use == True:
                         if rs[i].src_ready == [True, True] and current_cycle >= rs[i].rdy2exe_cycle:    # start an addition operation
                             # Add current cycle as the execution cycle of corresponding instruction
-                            processor.instruction_final_table[rs[i].instruction_index][1] = current_cycle
+                            print ("final table", processor.instruction_final_table[0])
+                            processor.instruction_final_table[rs[i].instruction_id][1] = current_cycle
                             print("inst index is", rs[i].instruction_index)
                             self.busy = True
                             print("     Adder occupied:", rs[i].instruction_type)
@@ -327,7 +328,7 @@ class PipelinedFU:
                     if rs[i].in_use == True:
                         if rs[i].src_ready == [True, True] and current_cycle >= rs[i].rdy2exe_cycle:    # start an addition operation
                             # Add current cycle as the execution cycle of corresponding instruction
-                            processor.instruction_final_table[rs[i].instruction_index][1] = current_cycle
+                            processor.instruction_final_table[rs[i].instruction_ID][1] = current_cycle
 
                             # self.busy = True
                             print("     Adder occupied:", rs[i].instruction_type)
@@ -503,7 +504,7 @@ class CDB:
 
             # Add current cycle as the WB cycle of corresponding instruction
             print("processor.ROB[rob_entry].instruction_index is",processor.ROB[rob_entry].instruction_index)
-            processor.instruction_final_table[processor.ROB[rob_entry].instruction_index][3] = current_cycle
+            processor.instruction_final_table[processor.ROB[rob_entry].instruction_ID][3] = current_cycle
 
             processor.ROB[rob_entry].value_rdy2commit_cycle = current_cycle + 1
             print("ROB", rob_entry, "updated to:", processor.ROB[rob_entry].reg_value,
@@ -571,6 +572,7 @@ class ROB:
         # TODO: = WB + 1
         self.value_rdy2commit_cycle = -1
         self.instruction_index = -1
+        self.instruction_ID = -1
 
     def clear(self):
         self.idle = True
@@ -589,8 +591,8 @@ class Processor(object):
 
         # declare an final instruction table for every inst
         # Issue, Exec, Mem, WB, Commit
-        self.instruction_final_table = [[-1 for j in range(5)] for i in range(num_inst)]
-
+        # self.instruction_final_table = [[-1 for j in range(5)] for i in range(num_inst)]
+        self.instruction_final_table = []
         self.cycle = 100  # current cycle
 
         self.ROB = [ROB() for i in range(num_rob)]  # set 1000 ROB entries
@@ -842,6 +844,7 @@ class Processor(object):
         print("inst index is", inst.inst)
 
         # BEN and BEQ
+        # TODO offset should be added
         if inst.inst == 3 or inst.inst == 4:
             flag = False
 
@@ -865,6 +868,7 @@ class Processor(object):
                         self.ROB[rob_entry_no].reg_number = inst.dest
                         self.ROB[rob_entry_no].idle = False
                         self.ROB[rob_entry_no].instruction_index = inst.index
+                        self.ROB[rob_entry_no].instruction_ID = inst.ID
 
                         src_0 = self.RAT[inst.source_0]
                         print("src_0 is", src_0)
@@ -950,6 +954,7 @@ class Processor(object):
                         self.ROB[rob_entry_no].reg_number = inst.dest
                         self.ROB[rob_entry_no].idle = False
                         self.ROB[rob_entry_no].instruction_index = inst.index
+                        self.ROB[rob_entry_no].instruction_ID = inst.ID
 
                         # 2.2 Update RAT
                         # RAT with dest 0-63 points to ARF
@@ -1049,6 +1054,7 @@ class Processor(object):
                         self.ROB[rob_entry_no].reg_number = inst.dest
                         self.ROB[rob_entry_no].idle = False
                         self.ROB[rob_entry_no].instruction_index = inst.index
+                        self.ROB[rob_entry_no].instruction_ID = inst.ID
 
                         # 2.2 Update RAT
                         # RAT with dest 0-63 points to ARF
@@ -1127,6 +1133,7 @@ class Processor(object):
                         self.ROB[rob_entry_no].reg_number = inst.dest
                         self.ROB[rob_entry_no].idle = False
                         self.ROB[rob_entry_no].instruction_index = inst.index
+                        self.ROB[rob_entry_no].instruction_ID = inst.ID
 
                         # 2.2 Update RAT
                         # RAT with dest 0-63 points to ARF
@@ -1206,7 +1213,8 @@ class Processor(object):
 
         # Add a new line for final output instruction table
         # record Issue cycle
-        self.instruction_final_table[inst.index][0] = self.cycle
+        self.instruction_final_table.append([self.cycle, -1, -1, -1, -1])
+        print("final table is", self.instruction_final_table)
 
         # print("ROB[0]:", self.ROB[0].idle, self.ROB[0].reg_number, self.ROB[0].reg_value, self.ROB[0].value_ready)
 
@@ -1237,10 +1245,10 @@ class Processor(object):
         print("++++++++++++++++++++++++++++++++")
         for i in range(self.config.adder.fu_number):
             self.Integer_Adder[i].operation(self.cycle, WRITE_BACK, self)
-        # for i in range(self.config.fpadder.fu_number):
-        #     self.FP_Adder[i].operation(self.cycle, WRITE_BACK, self)
-        # for i in range(self.config.fpmul.fu_number):
-        #     self.FP_Mul[i].operation(self.cycle, WRITE_BACK, self)
+        for i in range(self.config.fpadder.fu_number):
+            self.FP_Adder[i].operation(self.cycle, WRITE_BACK, self)
+        for i in range(self.config.fpmul.fu_number):
+            self.FP_Mul[i].operation(self.cycle, WRITE_BACK, self)
         print("-----------CDB Begin------------")
         self.CDB.arbiter(self)
         print("-----------CDB End--------------")
@@ -1249,10 +1257,10 @@ class Processor(object):
 
         for i in range(self.config.adder.fu_number):
             self.Integer_Adder[i].operation(self.cycle, EXEC, self)
-        # for i in range(self.config.fpadder.fu_number):
-        #     self.FP_Adder[i].operation(self.cycle, EXEC, self)
-        # for i in range(self.config.fpmul.fu_number):
-        #     self.FP_Mul[i].operation(self.cycle, EXEC, self)
+        for i in range(self.config.fpadder.fu_number):
+            self.FP_Adder[i].operation(self.cycle, EXEC, self)
+        for i in range(self.config.fpmul.fu_number):
+            self.FP_Mul[i].operation(self.cycle, EXEC, self)
 
     def commit(self):  # pc 1103
         print("-------------Commit begin:----------------")
@@ -1261,7 +1269,7 @@ class Processor(object):
         if rob_H.value_ready == True and self.cycle==self.ROB[self.ROB_tail].value_rdy2commit_cycle:  # ready to commit
 
             # Add current cycle as the wb cycle of corresponding instruction
-            self.instruction_final_table[rob_H.instruction_index][4] = self.cycle
+            self.instruction_final_table[rob_H.instruction_ID][4] = self.cycle
 
             self.RAT[rob_H.reg_number] = rob_H.reg_number  # update RAT to the latest ARF ID
             if rob_H.reg_number > 31:
