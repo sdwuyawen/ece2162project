@@ -189,6 +189,7 @@ class Adder:
                 for i in range(len(rs)):
                     print("rs[",i, "] is in use",rs[i].in_use)
                     if rs[i].in_use == True:
+                        print("rs[", i, "] src_ready is", rs[i].src_ready)
                         if rs[i].src_ready == [True, True] and current_cycle >= rs[i].rdy2exe_cycle:    # start an addition operation
                             # Add current cycle as the execution cycle of corresponding instruction
                             print ("final table", processor.instruction_final_table[0])
@@ -334,7 +335,7 @@ class PipelinedFU:
                             print("     Adder occupied:", rs[i].instruction_type)
 
                             pipelineinfo = FUPipeLineInfo()
-                            # rs[i].src_ready = [False, False]
+                            rs[i].src_ready = [False, False]
                             pipelineinfo.start_cycle = current_cycle
                             # print(self.config.ex_cycles)
                             pipelineinfo.finish_cycle = current_cycle + self.config.ex_cycles
@@ -347,9 +348,11 @@ class PipelinedFU:
                             pipelineinfo.wbing_cycle = pipelineinfo.finish_cycle
                             print("start cycle:", pipelineinfo.start_cycle)
                             print("finish cycle:", pipelineinfo.finish_cycle)
-                            break
+
                             # ENQUEUE
                             self.exeQueue.addtoq(pipelineinfo)
+                            print("Operate self.exeQueue.currentsize()", self.exeQueue.currentsize())
+                            break
 
             print("--------------",self.fu_index,"Pipielined FU EXEC End:-------------------\n")
             # elif self.busy == True:
@@ -375,7 +378,7 @@ class PipelinedFU:
             # The memory address is calculated in Ex stage. When R1 is ready to the LSQ, it broadcasts to all LSQ entry (Load) pending the memory address R2+0.
             # When R2 is ready, the memory address is calculated, and it broadcasts to all LSQ entry (Load) pending the memory address R2+0
             print("\n-------------",self.fu_index,"Pipielined FU WB Begin:----------------")
-
+            print("WB self.exeQueue.currentsize()", self.exeQueue.currentsize())
             if self.exeQueue.currentsize() > 0:
                 if self.exeQueue.queryfirstelement().wbing_cycle == current_cycle:
                     print("     WB cycle:", current_cycle)
@@ -385,8 +388,8 @@ class PipelinedFU:
                         self.busy = False
                         # release current RS entry after the WB task has been dropped to CDB
                         # self.rs[self.active_rs_num].in_use = False
-                        rs[self.active_rs_num].clear()
-                        print("rs[", self.active_rs_num, "] released")
+                        rs[currentExe.active_rs_num].clear()
+                        print("rs[", currentExe.active_rs_num, "] released")
                         # self.active_rs_num = -1
 
                         # remove this execution in FU, as it has been write back
@@ -451,7 +454,7 @@ class CDB:
         temp.fu_index = fu_index
         temp.rs = rs                             # Get the whole RS table of the FU
         temp.active_rs_number = active_rs_number
-
+        print("fu index is", fu_index)
         if self.buffer[fu_index].entries.currentsize() < self.buffer[fu_index].maxSize:
             self.buffer[fu_index].entries.addtoq(temp)
             print("inst id is",rs[active_rs_number].instruction_id,"fu_index is", fu_index)
@@ -466,12 +469,12 @@ class CDB:
         # copy the first element in each FU buffer together to select
 
         for i in range(len(buffer)):
-            print("loop buffer length is ", buffer[i].entries.currentsize())
-            print("loop self buffer length is ", self.buffer[i].entries.currentsize())
+            # print("loop buffer length is ", buffer[i].entries.currentsize())
+            # print("loop self buffer length is ", self.buffer[i].entries.currentsize())
             if buffer[i].entries.currentsize() != 0:
                 temp.append(buffer[i].entries.removefromq())
 
-        print("length of temp is",len(temp))
+        # print("length of temp is",len(temp))
         # print("before buffer length is ", self.buffer[1].entries.currentsize())
         if len(temp) > 0:
             temp.sort(key=lambda buffer_entry: buffer_entry.inst_wb_cycle)
@@ -533,7 +536,7 @@ class CDB:
                                 if rs[k][i].src_ready[j] == False:
                                     print("         update RS_Integer_Adder entry: i is", i, "j is", j)
                                     print("         temp dest address is ",temp[0].dest_addr)
-                                    print("         ",rs[k][i].dest_addr, rs[k][i].src_addr[0], rs[k][i].src_addr[1])
+                                    print("         ",rs[k][i].src_addr[j], temp[0].dest_addr)
                                     if rs[k][i].src_addr[j] == temp[0].dest_addr:
                                         rs[k][i].src_ready[j] = True
                                         rs[k][i].src_addr[j] = -1
@@ -662,8 +665,8 @@ class Processor(object):
         # print("RS integer adder", self.RS_Integer_Adder)
 
         self.Integer_Adder = [Adder(self.config.adder, i, self.RS_Integer_Adder[i]) for i in range(self.config.adder.fu_number)]
-        self.FP_Adder = [PipelinedFU(self.config.fpadder, j, self.RS_Float_Adder[i], 1) for j in range(self.config.adder.fu_number,self.config.adder.fu_number+self.config.fpadder.fu_number)]
-        self.FP_Mul = [PipelinedFU(self.config.fpmul, k, self.RS_Float_Mul[i], 2) for k in range(self.config.fpadder.fu_number, self.config.fpadder.fu_number+self.config.fpmul.fu_number)]
+        self.FP_Adder = [PipelinedFU(self.config.fpadder, j, self.RS_Float_Adder[j-self.config.adder.fu_number], 1) for j in range(self.config.adder.fu_number,self.config.adder.fu_number+self.config.fpadder.fu_number)]
+        self.FP_Mul = [PipelinedFU(self.config.fpmul, k, self.RS_Float_Mul[k-self.config.adder.fu_number-self.config.fpadder.fu_number], 2) for k in range(self.config.adder.fu_number+self.config.fpadder.fu_number, self.config.adder.fu_number+self.config.fpadder.fu_number+self.config.fpmul.fu_number)]
 
         # self.adder.print_config()
         # self.adder.operation(self.cycle)
@@ -676,7 +679,7 @@ class Processor(object):
         self.inst_ID_last = 0
 
         # TODO: number of FUs, each buffer size
-        self.CDB = CDB(self.config.adder.fu_number, 1)
+        self.CDB = CDB(self.config.adder.fu_number+self.config.fpadder.fu_number+self.config.fpmul.fu_number, 1)
 
         # TheQueue = Queue()
         # TheQueue.addtoq(self.CDB)
@@ -1052,7 +1055,7 @@ class Processor(object):
                         self.inst_ID_last = self.inst_ID_last + 1
 
                         # 2.1 Update ROB
-                        self.ROB[rob_entry_no].reg_number = inst.dest
+                        self.ROB[rob_entry_no].reg_number = inst.dest+32
                         self.ROB[rob_entry_no].idle = False
                         self.ROB[rob_entry_no].instruction_index = inst.index
                         self.ROB[rob_entry_no].instruction_ID = inst.ID
@@ -1103,8 +1106,8 @@ class Processor(object):
                         # 2.2 Update RAT
                         # RAT with dest 0-63 points to ARF
                         # RAT with dest >= 64 ... points to ROB
-                        self.RAT[inst.dest] = 64 + ROB_no
-
+                        self.RAT[inst.dest+32] = 64 + ROB_no
+                        print("dest is", self.RAT[inst.dest + 32])
                         flag = True
                         self.INDEX_FLOAT_ADDER = j + 1
                         print("go to break")
@@ -1133,7 +1136,7 @@ class Processor(object):
                         self.inst_ID_last = self.inst_ID_last + 1
 
                         # 2.1 Update ROB
-                        self.ROB[rob_entry_no].reg_number = inst.dest
+                        self.ROB[rob_entry_no].reg_number = inst.dest+32
                         self.ROB[rob_entry_no].idle = False
                         self.ROB[rob_entry_no].instruction_index = inst.index
                         self.ROB[rob_entry_no].instruction_ID = inst.ID
@@ -1184,7 +1187,8 @@ class Processor(object):
                         # 2.2 Update RAT
                         # RAT with dest 0-63 points to ARF
                         # RAT with dest >= 64 ... points to ROB
-                        self.RAT[inst.dest] = 64 + ROB_no
+                        self.RAT[inst.dest+32] = 64 + ROB_no
+                        print("dest is", self.RAT[inst.dest+32])
 
                         flag = True
                         self.INDEX_FLOAT_MUL= j + 1
@@ -1271,16 +1275,16 @@ class Processor(object):
         print("-------------Commit begin:----------------")
         # TODO: when commit, if the RAT entry does not point to this ROB entry, abandon this register value in ROB, and do not update ARF
         rob_H = self.ROB[self.ROB_tail]  # ROB header entry
-        if rob_H.value_ready == True and self.cycle==self.ROB[self.ROB_tail].value_rdy2commit_cycle:  # ready to commit
+        if rob_H.value_ready == True and self.cycle>=self.ROB[self.ROB_tail].value_rdy2commit_cycle:  # ready to commit
 
             # Add current cycle as the wb cycle of corresponding instruction
             self.instruction_final_table[rob_H.instruction_ID][4] = self.cycle
-
             self.RAT[rob_H.reg_number] = rob_H.reg_number  # update RAT to the latest ARF ID
+            print("commit index is ", rob_H.reg_number, "value is",self.RAT[rob_H.reg_number])
             if rob_H.reg_number > 31:
                 self.ARF.reg_float[rob_H.reg_number % 32] = rob_H.reg_value  # update ARF to the latest value in ROB
             else:
-                print()
+                print("for int num",rob_H.reg_number, rob_H.reg_value)
                 self.ARF.reg_int[rob_H.reg_number % 32] = rob_H.reg_value  # update ARF to the latest value in ROB
             self.ROB[self.ROB_tail].clear()  # remove current ROB head entry
             self.ROB_tail = (self.ROB_tail + 1) % 64  # update ROB header to the next one

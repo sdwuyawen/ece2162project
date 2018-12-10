@@ -91,14 +91,17 @@ def main():
 
     processor = Processor(num_ROB, -1, reg_int_val, reg_float_val, mem_val, inst_num, inst_list)
 
-    for i in range(0, 10):
+    for i in range(0, 30):
+
+        # processor.commit()
         processor.issue()
         processor.write_back()
         processor.execs()
+
         processor.commit()
         processor.clock()
 
-    output_txt(processor.instruction_final_table, processor.ARF.reg_int)
+    output_txt(processor.instruction_final_table, processor.ARF.reg_int, processor.ARF.reg_float)
 
     # print("-----------------------------------------------------------------")
     # processor.issue()
