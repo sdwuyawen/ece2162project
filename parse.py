@@ -95,9 +95,9 @@ def main():
 
         # processor.commit()
         processor.issue()
-        processor.write_back()
-        processor.execs()
 
+        processor.execs()
+        processor.write_back()
         processor.commit()
         processor.clock()
 

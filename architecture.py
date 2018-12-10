@@ -596,7 +596,7 @@ class Processor(object):
         # Issue, Exec, Mem, WB, Commit
         # self.instruction_final_table = [[-1 for j in range(5)] for i in range(num_inst)]
         self.instruction_final_table = []
-        self.cycle = 100  # current cycle
+        self.cycle = 1  # current cycle
 
         self.ROB = [ROB() for i in range(num_rob)]  # set 1000 ROB entries
         print(self.ROB.__len__())
