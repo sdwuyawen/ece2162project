@@ -342,7 +342,10 @@ class PipelinedFU:
                             pipelineinfo.active_rs_num = rs[i].index
                             print("active_rs_num = ", pipelineinfo.active_rs_num)
                             if self.function == 1:          # Add
-                                rs[i].dest_value = rs[i].src_value[0] + rs[i].src_value[1]
+                                if rs[i].instruction_type == 9:
+                                    rs[i].dest_value = rs[i].src_value[0] - rs[i].src_value[1]
+                                else:
+                                    rs[i].dest_value = rs[i].src_value[0] + rs[i].src_value[1]
                             elif self.function == 2:        # Multiply
                                 rs[i].dest_value = rs[i].src_value[0] * rs[i].src_value[1]
                             pipelineinfo.wbing_cycle = pipelineinfo.finish_cycle

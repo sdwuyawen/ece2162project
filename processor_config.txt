@@ -1,9 +1,9 @@
 # of rs / Cycles in EX / Cycles in Mem / # of FUs
 Integer adder
-4 1 -1 2
+2 1 -1 2
 FP adder
 3 3 -1 1
 FP multiplier
-2 20 -1 1
+1 20 -1 1
 Load/store unit
 3 1 4 1
