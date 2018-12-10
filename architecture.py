@@ -328,7 +328,7 @@ class PipelinedFU:
                     if rs[i].in_use == True:
                         if rs[i].src_ready == [True, True] and current_cycle >= rs[i].rdy2exe_cycle:    # start an addition operation
                             # Add current cycle as the execution cycle of corresponding instruction
-                            processor.instruction_final_table[rs[i].instruction_ID][1] = current_cycle
+                            processor.instruction_final_table[rs[i].instruction_id][1] = current_cycle
 
                             # self.busy = True
                             print("     Adder occupied:", rs[i].instruction_type)
@@ -347,7 +347,7 @@ class PipelinedFU:
                             pipelineinfo.wbing_cycle = pipelineinfo.finish_cycle
                             print("start cycle:", pipelineinfo.start_cycle)
                             print("finish cycle:", pipelineinfo.finish_cycle)
-
+                            break
                             # ENQUEUE
                             self.exeQueue.addtoq(pipelineinfo)
 
@@ -875,12 +875,6 @@ class Processor(object):
                         print("src_1 is", inst.source_1)
                         src_1 = self.RAT[inst.source_1]
 
-
-                        # 2.2 Update RAT
-                        # RAT with dest 0-63 points to ARF
-                        # RAT with dest >= 64 ... points to ROB
-                        self.RAT[inst.dest] = 64 + ROB_no
-
                         # 2.3 Update RS
                         self.RS_Integer_Adder[j][i].in_use = True
                         self.RS_Integer_Adder[j][i].instruction_type = inst.inst
@@ -922,6 +916,11 @@ class Processor(object):
                             self.RS_Integer_Adder[j][i].src_ready = [False, False]
                             self.RS_Integer_Adder[j][i].src_value = [-1, -1]
 
+                        # 2.2 Update RAT
+                        # RAT with dest 0-63 points to ARF
+                        # RAT with dest >= 64 ... points to ROB
+                        self.RAT[inst.dest] = 64 + ROB_no
+
                         self.RS_Integer_Adder[j][i].rdy2exe_cycle = self.cycle + 1
 
                         flag = True
@@ -956,10 +955,7 @@ class Processor(object):
                         self.ROB[rob_entry_no].instruction_index = inst.index
                         self.ROB[rob_entry_no].instruction_ID = inst.ID
 
-                        # 2.2 Update RAT
-                        # RAT with dest 0-63 points to ARF
-                        # RAT with dest >= 64 ... points to ROB
-                        self.RAT[inst.dest] = 64 + ROB_no
+
 
                         # 2.3 Update RS
                         self.RS_Integer_Adder[j][i].in_use = True
@@ -1024,6 +1020,11 @@ class Processor(object):
 
                             self.RS_Integer_Adder[j][i].rdy2exe_cycle = self.cycle + 1
 
+                        # 2.2 Update RAT
+                        # RAT with dest 0-63 points to ARF
+                        # RAT with dest >= 64 ... points to ROB
+                        self.RAT[inst.dest] = 64 + ROB_no
+
                         flag = True
                         self.INDEX_INT_ADDER = j+1
                         print("go to break")
@@ -1056,10 +1057,7 @@ class Processor(object):
                         self.ROB[rob_entry_no].instruction_index = inst.index
                         self.ROB[rob_entry_no].instruction_ID = inst.ID
 
-                        # 2.2 Update RAT
-                        # RAT with dest 0-63 points to ARF
-                        # RAT with dest >= 64 ... points to ROB
-                        self.RAT[inst.dest] = 64 + ROB_no
+
 
                         # 2.3 Update RS
                         self.RS_Float_Adder[j][i].in_use = True
@@ -1102,6 +1100,11 @@ class Processor(object):
 
                         self.RS_Float_Adder[j][i].rdy2exe_cycle = self.cycle + 1
 
+                        # 2.2 Update RAT
+                        # RAT with dest 0-63 points to ARF
+                        # RAT with dest >= 64 ... points to ROB
+                        self.RAT[inst.dest] = 64 + ROB_no
+
                         flag = True
                         self.INDEX_FLOAT_ADDER = j + 1
                         print("go to break")
@@ -1135,10 +1138,7 @@ class Processor(object):
                         self.ROB[rob_entry_no].instruction_index = inst.index
                         self.ROB[rob_entry_no].instruction_ID = inst.ID
 
-                        # 2.2 Update RAT
-                        # RAT with dest 0-63 points to ARF
-                        # RAT with dest >= 64 ... points to ROB
-                        self.RAT[inst.dest] = 64 + ROB_no
+
 
                         # 2.3 Update RS
                         self.RS_Float_Mul[j][i].in_use = True
@@ -1180,6 +1180,11 @@ class Processor(object):
                             self.RS_Float_Mul[j][i].src_value = [-1, -1]
 
                         self.RS_Float_Mul[j][i].rdy2exe_cycle = self.cycle + 1
+
+                        # 2.2 Update RAT
+                        # RAT with dest 0-63 points to ARF
+                        # RAT with dest >= 64 ... points to ROB
+                        self.RAT[inst.dest] = 64 + ROB_no
 
                         flag = True
                         self.INDEX_FLOAT_MUL= j + 1
