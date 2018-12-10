@@ -3,3 +3,5 @@ Add R4, R1, R2
 Add R2, R4, R2
 Add R5, R6, R7
 Mult.d F8, F9, F10
+Sub R2, R7, R4
+Sub.d F2, F2, F2

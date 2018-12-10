@@ -190,6 +190,19 @@ class Adder:
                     print("rs[",i, "] is in use",rs[i].in_use)
                     if rs[i].in_use == True:
                         print("rs[", i, "] src_ready is", rs[i].src_ready)
+
+                        for j in [0,1]:
+                            if rs[i].src_ready[j] == False:
+                                if processor.ROB[rs[i].src_addr[j]].idle == True:
+                                    rs[i].src_ready[j] = True
+                                    addr = processor.RAT[processor.ROB[rs[i].src_addr[j]].pointer]
+                                    rs[i].src_addr[j] = addr
+                                    print("addr is",addr)
+                                    if addr < 32:
+                                        rs[i].src_value[j] = processor.ARF.reg_int[addr]
+                                    # elif  addr >= 32 and addr < 64:
+                                    #     rs[i].src_value[j] = processor.ARF.reg_float[addr % 32]
+
                         if rs[i].src_ready == [True, True] and current_cycle >= rs[i].rdy2exe_cycle:    # start an addition operation
                             # Add current cycle as the execution cycle of corresponding instruction
                             print ("final table", processor.instruction_final_table[0])
@@ -579,6 +592,7 @@ class ROB:
         self.value_rdy2commit_cycle = -1
         self.instruction_index = -1
         self.instruction_ID = -1
+        self.pointer = -1
 
     def clear(self):
         self.idle = True
@@ -1290,6 +1304,9 @@ class Processor(object):
                 print("for int num",rob_H.reg_number, rob_H.reg_value)
                 self.ARF.reg_int[rob_H.reg_number % 32] = rob_H.reg_value  # update ARF to the latest value in ROB
             self.ROB[self.ROB_tail].clear()  # remove current ROB head entry
+
+            self.ROB[self.ROB_tail].pointer = rob_H.reg_number
+
             self.ROB_tail = (self.ROB_tail + 1) % 64  # update ROB header to the next one
 
         print(self.ROB_tail)
