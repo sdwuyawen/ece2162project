@@ -215,13 +215,29 @@ class Adder:
                             self.finish_cycle = current_cycle + self.config.ex_cycles
                             self.active_rs_num = rs[i].index
                             print("active_rs_num = ", self.active_rs_num)
-                            if rs[i].instruction_type == 8:
+                            if rs[i].instruction_type == 8 or rs[i].instruction_type == 3 or rs[
+                                i].instruction_type == 4:
                                 rs[i].dest_value = rs[i].src_value[0] - rs[i].src_value[1]
                             else:
                                 rs[i].dest_value = rs[i].src_value[0] + rs[i].src_value[1]
                             self.wbing_cycle = self.finish_cycle
+                            if processor.ifbranch(rs[i].instruction_index) == True:  ##########added for branch operation##############################################
+                                if (rs[i].instruction_type == 3 and rs[i].dest_value == 0) or (
+                                        rs[i].instruction_type == 4 and rs[i].dest_value != 0):  ####beq and bne
+                                    predict = True
+                                else:
+                                    predict = False
+                                print("predict =", predict)
+                                print("branch rs[i].dest_value=", rs[i].dest_value, "rs[i].instruction_type=",
+                                      rs[i].instruction_type)
+                                processor.BTB_predict(rs[i].instruction_index,
+                                                      predict)  # predict iftaken and validate new BTB entry###################################
+                                processor.BTB[rs[i].instruction_index % 8].empty = False
+                                processor.BTB[rs[i].instruction_index % 8].issue_enable = True
+
                             print("start cycle:", self.start_cycle)
                             print("finish cycle:", self.finish_cycle)
+
                             break
             print("--------------",self.fu_index,"Adder EXEC End:-------------------\n")
             # elif self.busy == True:
@@ -735,7 +751,13 @@ class ROB:
 
 # class Issue:
 #     def __init__(self, processor):
-
+class BTB:
+    def __init__(self):
+        self.next_PC=0
+        self.iftaken=True
+        self.empty=True
+        self.issue_enable=True
+        print("BTB: ", self.next_PC)
 
 class Processor(object):
     def __init__(self, num_rob, num_cdb, reg_int, reg_float, mem_val, num_inst, inst_list):
@@ -747,6 +769,7 @@ class Processor(object):
         self.instruction_final_table = []
         self.cycle = 1  # current cycle
 
+        self.BTB = [BTB() for i in range(8)] #    ************************* create BTB  ***************************************
         self.ROB = [ROB() for i in range(num_rob)]  # set 1000 ROB entries
         print(self.ROB.__len__())
         self.ROB_head = 0
@@ -838,6 +861,28 @@ class Processor(object):
         self.cycle += 1
         print("cycle changing to: ", self.cycle)
 
+
+    def ifbranch(self, index):
+        if self.inst_list[index].inst==3 or self.inst_list[index].inst==4: # only works on beq and bne
+            return True
+        else:
+            return False
+
+    def BTB_add_entry(self, index, offset):
+        id=index%8
+        self.BTB[id].next_PC=index+1+offset#****************need current PC*******************************
+
+    def BTB_lookup(self, index):        #   ************************************ index from PC need to calculated beforehand***********************************
+        id=index%8
+        if self.BTB[id].iftaken==True:
+            self.inst_issue_index=self.BTB[id].next_PC#****************need to pass the predicted PC to the next instruction**********
+        else:
+            self.inst_issue_index+=1
+
+    def BTB_predict(self,index,predict_Correct):#***************need input of prediction_correctness*****************#
+        id=index%8
+        self.BTB[id].empty=False
+        self.BTB[id].iftaken=predict_Correct
     # def do_adder(self):
     #     print(whoami())
     #     # print(__name__)
@@ -876,12 +921,29 @@ class Processor(object):
     def issue(self):
         print("\ninst list not empty")
         if self.inst_issue_index <= self.inst_num - 1:
-            # The ROB and RS has one more space for the inst
-            if self.issue_one_inst(self.inst_list[self.inst_issue_index]) == 0:
-                print("Issue Inst", self.inst_issue_index, self.inst_list[self.inst_issue_index].str, "succeed")
-                self.inst_issue_index += 1
+            print("current Inst type=", self.inst_list[self.inst_issue_index].inst)
+            print("current parsed instruction=",self.inst_issue_index, "current Issued Instruction=", self.inst_ID_last)
+            if self.ifbranch(self.inst_issue_index)==True:# determine if it is a branch instruction#############################
+                if self.BTB[self.inst_issue_index].issue_enable==True:########## prevent further redundant issue ###########
+                    if self.issue_one_inst(self.inst_list[self.inst_issue_index]) == 0:
+                        self.inst_ID_last = self.inst_ID_last - 1 ###############making the issued ID and parsed ID consistant
+                        print("Issue Inst", self.inst_issue_index, self.inst_list[self.inst_issue_index].str, "succeed")
+                else:
+                    print("wait for the new BTB entry to be ready after EXE")
+                if self.BTB[self.inst_issue_index].empty==True:# find out if BTB entry is empty##################################################
+                    self.BTB[self.inst_issue_index].issue_enable=False########## prevent further redundant issue ###########
+                    self.BTB_add_entry(self.inst_issue_index,self.inst_list[self.inst_issue_index].offset)# add entry#############################
+                else:
+                    self.BTB_lookup(self.inst_issue_index) ##################determine the next instruction##################################
+                    self.inst_ID_last = self.inst_ID_last + 1 ###############making the issued ID and parsed ID consistant
+                #print("BTB_next_pc=",self.BTB[self.inst_issue_index].next_PC, "next_Instruction=",self.inst_issue_index, "next_issued_instr=",self.inst_ID_last)
+
             else:
-                print("Issue Inst", self.inst_issue_index, "failed")
+                if self.issue_one_inst(self.inst_list[self.inst_issue_index]) == 0:
+                    print("Issue Inst", self.inst_issue_index, self.inst_list[self.inst_issue_index].str, "succeed")
+                    self.inst_issue_index += 1# need stall function  solved
+                else:
+                    print("Issue Inst", self.inst_issue_index, "failed")
 
 
     def issue_one_inst(self, inst):
@@ -1017,7 +1079,7 @@ class Processor(object):
                         self.inst_ID_last = self.inst_ID_last + 1
 
                         # 2.1 Update ROB
-                        self.ROB[rob_entry_no].reg_number = inst.dest
+                        # self.ROB[rob_entry_no].reg_number = inst.dest
                         self.ROB[rob_entry_no].idle = False
                         self.ROB[rob_entry_no].instruction_index = inst.index
                         self.ROB[rob_entry_no].instruction_ID = inst.ID
@@ -1071,7 +1133,7 @@ class Processor(object):
                         # 2.2 Update RAT
                         # RAT with dest 0-63 points to ARF
                         # RAT with dest >= 64 ... points to ROB
-                        self.RAT[inst.dest] = 64 + ROB_no
+                        # self.RAT[inst.dest] = 64 + ROB_no
 
                         self.RS_Integer_Adder[j][i].rdy2exe_cycle = self.cycle + 1
 

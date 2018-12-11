@@ -3,5 +3,6 @@ Add R1, R2, R3
 Sub R4, R5, R6
 Add R1, R2, R3
 Addi R7, R9, 1
+Bne R1, R2, -4
 Sub R4, R5, R6
 Add R9, R10, R0

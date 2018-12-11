@@ -93,6 +93,10 @@ def main():
 
     for i in range(0, 60):
 
+        print("------branch issue------")
+        print("inst issue ID", processor.inst_ID_last)
+        print("inst index", processor.inst_issue_index)
+        print("------branch issue END------")
         # processor.commit()
         processor.issue()
 
