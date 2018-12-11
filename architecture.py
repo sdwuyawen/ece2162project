@@ -190,10 +190,12 @@ class Adder:
                 # Find an entry in my RS that all dependencies are ready for Execution
 
                 for k in range(self.tail, self.tail+len(rs)):
+                # rs.sort(key=lambda rs_entry:rs_entry.instruction_id)
+                # for i in range(len(rs)):
                     i = k % len(rs)
                     print("rs[",i, "] is in use",rs[i].in_use)
 
-                    if rs[i].in_use == True:
+                    if rs[i].in_use == True and rs[i].instruction_id != -1:
                         print("rs[", i, "] src_ready is", rs[i].src_ready)
 
                         for j in [0,1]:
@@ -219,7 +221,8 @@ class Adder:
                             self.start_cycle = current_cycle
                             # print(self.config.ex_cycles)
                             self.finish_cycle = current_cycle + self.config.ex_cycles
-                            self.active_rs_num_queue.append(rs[i].index)
+                            print("queue add ", rs[i].index)
+                            self.active_rs_num_queue.append(i)
                             # print("active_rs_num = ", self.active_rs_num)
 
                             self.tail = i+1
@@ -277,9 +280,10 @@ class Adder:
                 if self.wbing_cycle == current_cycle:
                     print("     WB cycle:", current_cycle)
                     self.active_rs_num=self.active_rs_num_queue[0]
-                    self.active_rs_num_queue.pop(0)
+                    print("     active num:", self.active_rs_num)
                     # Successfully drop it to CDB
                     if processor.CDB.put_to_buffer(rs, self.active_rs_num, self.fu_index, current_cycle) == True:
+                        self.active_rs_num_queue.pop(0)
                         self.busy = False
                         # release current RS entry after the WB task has been dropped to CDB
                         # self.rs[self.active_rs_num].in_use = False
