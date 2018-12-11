@@ -117,6 +117,7 @@ class ReservationStation:
         self.rdy2exe_cycle = -1
         self.id = -1
 
+
     def clear(self):
         self.__init__()
         print(whoami())
@@ -163,6 +164,8 @@ class Adder:
         self.finish_cycle = -1
         self.fu_index = FU_index # to indicate the ID of this FU. For CDB use
         self.rs = rs
+        self.tail = 0
+        self.active_rs_num_queue=list()
 
     def print_config(self):
         print("adder config:")
@@ -185,8 +188,11 @@ class Adder:
                 # for i in range(len(self.config.rs_number)):
                 # for i, rs in enumerate(rs):
                 # Find an entry in my RS that all dependencies are ready for Execution
-                for i in range(len(rs)):
+
+                for k in range(self.tail, self.tail+len(rs)):
+                    i = k % len(rs)
                     print("rs[",i, "] is in use",rs[i].in_use)
+
                     if rs[i].in_use == True:
                         print("rs[", i, "] src_ready is", rs[i].src_ready)
 
@@ -204,17 +210,20 @@ class Adder:
 
                         if rs[i].src_ready == [True, True] and current_cycle >= rs[i].rdy2exe_cycle:    # start an addition operation
                             # Add current cycle as the execution cycle of corresponding instruction
-                            print ("final table", processor.instruction_final_table[0])
+                            print ("final table", processor.instruction_final_table[rs[i].instruction_id])
                             processor.instruction_final_table[rs[i].instruction_id][1] = current_cycle
                             print("inst index is", rs[i].instruction_index)
                             self.busy = True
                             print("     Adder occupied:", rs[i].instruction_type)
-                            # rs[i].src_ready = [False, False]
+                            rs[i].src_ready = [False, False]
                             self.start_cycle = current_cycle
                             # print(self.config.ex_cycles)
                             self.finish_cycle = current_cycle + self.config.ex_cycles
-                            self.active_rs_num = rs[i].index
-                            print("active_rs_num = ", self.active_rs_num)
+                            self.active_rs_num_queue.append(rs[i].index)
+                            # print("active_rs_num = ", self.active_rs_num)
+
+                            self.tail = i+1
+
                             if rs[i].instruction_type == 8 or rs[i].instruction_type == 3 or rs[
                                 i].instruction_type == 4:
                                 rs[i].dest_value = rs[i].src_value[0] - rs[i].src_value[1]
@@ -233,7 +242,7 @@ class Adder:
                                 processor.BTB_predict(rs[i].instruction_index,
                                                       predict)  # predict iftaken and validate new BTB entry###################################
                                 processor.BTB[rs[i].instruction_index % 8].empty = False
-                                processor.BTB[rs[i].instruction_index % 8].issue_enable = True
+                                # processor.BTB[rs[i].instruction_index % 8].issue_enable = True
 
                             print("start cycle:", self.start_cycle)
                             print("finish cycle:", self.finish_cycle)
@@ -267,7 +276,8 @@ class Adder:
                 print(" Adder.busy:")
                 if self.wbing_cycle == current_cycle:
                     print("     WB cycle:", current_cycle)
-
+                    self.active_rs_num=self.active_rs_num_queue[0]
+                    self.active_rs_num_queue.pop(0)
                     # Successfully drop it to CDB
                     if processor.CDB.put_to_buffer(rs, self.active_rs_num, self.fu_index, current_cycle) == True:
                         self.busy = False
@@ -795,37 +805,38 @@ class Processor(object):
         self.config.read_config()
         self.config.print_config()
 
-        for j in range(self.config.ldst.rs_number):
+        # for j in range(self.config.ldst.rs_number):
             # LSQ_list =
-            self.RS_LSQ = [[LSQ() for i in range(self.config.ldst.rs_number)] for i in range(self.config.ldst.fu_number)]
-            for i in range(self.config.ldst.fu_number):
-                for j in range(self.config.ldst.rs_number):
-                    self.RS_LSQ[i][j].index = j
-                    self.RS_LSQ[i][j].id = 4
+        self.RS_LSQ = [[LSQ() for i in range(self.config.ldst.rs_number)] for i in range(self.config.ldst.fu_number)]
+        for i in range(self.config.ldst.fu_number):
+            # self.RS_LSQ[i].tail = 0
+            for j in range(self.config.ldst.rs_number):
+                self.RS_LSQ[i][j].index = j
+                self.RS_LSQ[i][j].id = 4
 
-        for j in range(self.config.adder.fu_number):
+        # for j in range(self.config.adder.fu_number):
             # int_adder_list =
-            self.RS_Integer_Adder = [[ReservationStation() for i in range(self.config.adder.rs_number)] for i in range(self.config.adder.fu_number)]
-            for i in range(self.config.adder.fu_number):
-                for j in range(self.config.adder.rs_number):
-                    self.RS_Integer_Adder[i][j].index = j
-                    self.RS_Integer_Adder[i][j].id = 1
+        self.RS_Integer_Adder = [[ReservationStation() for i in range(self.config.adder.rs_number)] for i in range(self.config.adder.fu_number)]
+        for i in range(self.config.adder.fu_number):
+            for j in range(self.config.adder.rs_number):
+                self.RS_Integer_Adder[i][j].index = j
+                self.RS_Integer_Adder[i][j].id = 1
 
-        for j in range(self.config.fpadder.fu_number):
+        # for j in range(self.config.fpadder.fu_number):
             # float_adder_list =
-            self.RS_Float_Adder = [[ReservationStation() for i in range(self.config.fpadder.rs_number)] for i in range(self.config.fpadder.fu_number)]
-            for i in range(self.config.fpadder.fu_number):
-                for j in range(self.config.fpadder.rs_number):
-                    self.RS_Float_Adder[i][j].index = j
-                    self.RS_Float_Adder[i][j].id = 2
+        self.RS_Float_Adder = [[ReservationStation() for i in range(self.config.fpadder.rs_number)] for i in range(self.config.fpadder.fu_number)]
+        for i in range(self.config.fpadder.fu_number):
+            for j in range(self.config.fpadder.rs_number):
+                self.RS_Float_Adder[i][j].index = j
+                self.RS_Float_Adder[i][j].id = 2
 
-        for j in range(self.config.fpadder.fu_number):
+        # for j in range(self.config.fpadder.fu_number):
             # float_mul_list =
-            self.RS_Float_Mul = [[ReservationStation() for i in range(self.config.fpmul.rs_number)] for i in range(self.config.fpmul.fu_number)]
-            for i in range(self.config.fpmul.fu_number):
-                for j in range(self.config.fpmul.rs_number):
-                    self.RS_Float_Mul[i][j].index = j
-                    self.RS_Float_Mul[i][j].id = 3
+        self.RS_Float_Mul = [[ReservationStation() for i in range(self.config.fpmul.rs_number)] for i in range(self.config.fpmul.fu_number)]
+        for i in range(self.config.fpmul.fu_number):
+            for j in range(self.config.fpmul.rs_number):
+                self.RS_Float_Mul[i][j].index = j
+                self.RS_Float_Mul[i][j].id = 3
 
 
         # init adder
@@ -922,26 +933,34 @@ class Processor(object):
         print("\ninst list not empty")
         if self.inst_issue_index <= self.inst_num - 1:
             print("current Inst type=", self.inst_list[self.inst_issue_index].inst)
-            print("current parsed instruction=",self.inst_issue_index, "current Issued Instruction=", self.inst_ID_last)
-            if self.ifbranch(self.inst_issue_index)==True:# determine if it is a branch instruction#############################
-                if self.BTB[self.inst_issue_index].issue_enable==True:########## prevent further redundant issue ###########
+            print("current parsed instruction=", self.inst_issue_index, "current Issued Instruction=",
+                  self.inst_ID_last)
+            if self.ifbranch(
+                    self.inst_issue_index) == True:  # determine if it is a branch instruction#############################
+                if self.BTB[
+                    self.inst_issue_index].issue_enable == True:  ########## prevent further redundant issue ###########
                     if self.issue_one_inst(self.inst_list[self.inst_issue_index]) == 0:
                         # self.inst_ID_last = self.inst_ID_last - 1 ###############making the issued ID and parsed ID consistant
                         print("Issue Inst", self.inst_issue_index, self.inst_list[self.inst_issue_index].str, "succeed")
                 else:
                     print("wait for the new BTB entry to be ready after EXE")
-                if self.BTB[self.inst_issue_index].empty==True:# find out if BTB entry is empty##################################################
-                    self.BTB[self.inst_issue_index].issue_enable=False########## prevent further redundant issue ###########
-                    self.BTB_add_entry(self.inst_issue_index,self.inst_list[self.inst_issue_index].offset)# add entry#############################
+                if self.BTB[
+                    self.inst_issue_index].empty == True:  # find out if BTB entry is empty##################################################
+                    self.BTB[
+                        self.inst_issue_index].issue_enable = False  ########## prevent further redundant issue ###########
+                    self.BTB_add_entry(self.inst_issue_index, self.inst_list[
+                        self.inst_issue_index].offset)  # add entry#############################
                 else:
-                    self.BTB_lookup(self.inst_issue_index) ##################determine the next instruction##################################
+                    self.BTB[self.inst_issue_index].issue_enable = True
+                    self.BTB_lookup(
+                        self.inst_issue_index)  ##################determine the next instruction##################################
                     # self.inst_ID_last = self.inst_ID_last + 1 ###############making the issued ID and parsed ID consistant
-                #print("BTB_next_pc=",self.BTB[self.inst_issue_index].next_PC, "next_Instruction=",self.inst_issue_index, "next_issued_instr=",self.inst_ID_last)
+                # print("BTB_next_pc=",self.BTB[self.inst_issue_index].next_PC, "next_Instruction=",self.inst_issue_index, "next_issued_instr=",self.inst_ID_last)
 
             else:
                 if self.issue_one_inst(self.inst_list[self.inst_issue_index]) == 0:
                     print("Issue Inst", self.inst_issue_index, self.inst_list[self.inst_issue_index].str, "succeed")
-                    self.inst_issue_index += 1# need stall function  solved
+                    self.inst_issue_index += 1  # need stall function  solved
                 else:
                     print("Issue Inst", self.inst_issue_index, "failed")
 
