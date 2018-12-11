@@ -2,7 +2,7 @@
 
 from copy import deepcopy
 
-def output_txt(instruction_final_table, reg_int, reg_float):
+def output_txt(instruction_final_table, reg_int, reg_float, mem):
 
     inst_set = []
 
@@ -74,6 +74,39 @@ def output_txt(instruction_final_table, reg_int, reg_float):
         f.write(str(reg_float[i])+"\t")
     f.write("\n")
 
+    f.write("\n")
+    f.write("MEM:\n")
+
+    for i in range(0, 16):
+        f.write("M"+str(i)+"\t")
+    f.write("\n")
+    for i in range(0, 16):
+        print(str(mem[i])+"\t")
+        # f.write("{:.2f}".format(reg_float[i])+"\t")
+        f.write(str(mem[i]) + "\t")
+    f.write("\n\n")
+
+    for i in range(16, 32):
+        f.write("M"+str(i)+"\t")
+    f.write("\n")
+    for i in range(16, 32):
+        f.write(str(mem[i])+"\t")
+    f.write("\n\n")
+
+    for i in range(32, 48):
+        f.write("M"+str(i)+"\t")
+    f.write("\n")
+    for i in range(32, 48):
+        f.write(str(mem[i])+"\t")
+    f.write("\n\n")
+
+    for i in range(48, 64):
+        f.write("M"+str(i)+"\t")
+    f.write("\n")
+    for i in range(48, 64):
+        f.write(str(mem[i])+"\t")
+
+    f.write("\n\n")
 
     f.close()
 

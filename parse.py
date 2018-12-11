@@ -91,7 +91,7 @@ def main():
 
     processor = Processor(num_ROB, -1, reg_int_val, reg_float_val, mem_val, inst_num, inst_list)
 
-    for i in range(0, 50):
+    for i in range(0, 80):
 
         print("------branch issue------")
         print("inst issue ID", processor.inst_ID_last)
@@ -105,7 +105,7 @@ def main():
         processor.commit()
         processor.clock()
 
-    output_txt(processor.instruction_final_table, processor.ARF.reg_int, processor.ARF.reg_float)
+    output_txt(processor.instruction_final_table, processor.ARF.reg_int, processor.ARF.reg_float, processor.MEM)
 
     # print("-----------------------------------------------------------------")
     # processor.issue()

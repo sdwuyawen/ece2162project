@@ -134,6 +134,8 @@ class LSQ:
         self.in_use = False
         self.instruction_type = -1
         self.instruction_id = -1
+        self.dest_addr = -1
+        self.dest_value = -1
         self.offset = -1
         self.id = -1
         self.src_addr = [-1, -1]
@@ -198,15 +200,15 @@ class Adder:
                     if rs[i].in_use == True and rs[i].instruction_id != -1:
                         print("rs[", i, "] src_ready is", rs[i].src_ready)
 
-                        for j in [0,1]:
-                            if rs[i].src_ready[j] == False and rs[i].src_addr[j] > 63:
-                                if processor.ROB[rs[i].src_addr[j]].idle == True:
-                                    rs[i].src_ready[j] = True
-                                    addr = processor.RAT[processor.ROB[rs[i].src_addr[j]].pointer]
-                                    rs[i].src_addr[j] = addr
-                                    print("addr is",addr)
-                                    if addr < 32:
-                                        rs[i].src_value[j] = processor.ARF.reg_int[addr]
+                        # for j in [0,1]:
+                        #     if rs[i].src_ready[j] == False and rs[i].src_addr[j] > 63:
+                        #         if processor.ROB[rs[i].src_addr[j]].idle == True:
+                        #             rs[i].src_ready[j] = True
+                        #             addr = processor.RAT[processor.ROB[rs[i].src_addr[j]].pointer]
+                        #             rs[i].src_addr[j] = addr
+                        #             print("addr is",addr)
+                        #             if addr < 32:
+                        #                 rs[i].src_value[j] = processor.ARF.reg_int[addr]
                                     # elif  addr >= 32 and addr < 64:
                                     #     rs[i].src_value[j] = processor.ARF.reg_float[addr % 32]
 
@@ -245,6 +247,9 @@ class Adder:
                                 processor.BTB_predict(rs[i].instruction_index,
                                                       predict)  # predict iftaken and validate new BTB entry###################################
                                 processor.BTB[rs[i].instruction_index % 8].empty = False
+                            # if rs[i].instruction_type == 4 or rs[i].instruction_type == 3:
+                            #     rs[i].clear()
+                            #     self.wbing_cycle = 0
                                 # processor.BTB[rs[i].instruction_index % 8].issue_enable = True
 
                             print("start cycle:", self.start_cycle)
@@ -314,6 +319,8 @@ class LSQ_Adder:
         self.finish_cycle = -1
         self.fu_index = FU_index # to indicate the ID of this FU. For CDB use
         self.rs = rs
+        self.tail = 0
+        self.active_rs_num_queue=list()
 
     def print_config(self):
         print("adder config:")
@@ -330,15 +337,20 @@ class LSQ_Adder:
 
         # print("processor cycle: ", current_cycle)
         if operation == EXEC:
-            print("--------------",self.fu_index,"Adder EXEC Begin:-------------------")
+            print("--------------",self.fu_index,"LSQ Adder EXEC Begin:-------------------")
             if self.busy == False:
                 print(" Adder got:")
                 # for i in range(len(self.config.rs_number)):
                 # for i, rs in enumerate(rs):
                 # Find an entry in my RS that all dependencies are ready for Execution
-                for i in range(len(rs)):
+
+                for k in range(self.tail, self.tail+len(rs)):
+                # rs.sort(key=lambda rs_entry:rs_entry.instruction_id)
+                # for i in range(len(rs)):
+                    i = k % len(rs)
                     print("rs[",i, "] is in use",rs[i].in_use)
-                    if rs[i].in_use == True:
+
+                    if rs[i].in_use == True and rs[i].instruction_id != -1:
                         print("rs[", i, "] src_ready is", rs[i].src_ready)
 
                         for j in [0,1]:
@@ -355,24 +367,60 @@ class LSQ_Adder:
 
                         if rs[i].src_ready == [True, True] and current_cycle >= rs[i].rdy2exe_cycle:    # start an addition operation
                             # Add current cycle as the execution cycle of corresponding instruction
-                            print ("final table", processor.instruction_final_table[0])
+                            # print ("final table", processor.instruction_final_table[rs[i].instruction_id])
                             processor.instruction_final_table[rs[i].instruction_id][1] = current_cycle
                             print("inst index is", rs[i].instruction_index)
                             self.busy = True
                             print("     Adder occupied:", rs[i].instruction_type)
-                            # rs[i].src_ready = [False, False]
+                            rs[i].src_ready = [False, False]
                             self.start_cycle = current_cycle
                             # print(self.config.ex_cycles)
                             self.finish_cycle = current_cycle + self.config.ex_cycles
-                            self.active_rs_num = rs[i].index
-                            print("active_rs_num = ", self.active_rs_num)
-                            if rs[i].instruction_type == 8:
-                                rs[i].dest_value = rs[i].src_value[0] - rs[i].src_value[1]
-                            else:
-                                rs[i].dest_value = rs[i].src_value[0] + rs[i].src_value[1]
-                            self.wbing_cycle = self.finish_cycle
+                            print("queue add ", rs[i].index)
+                            self.active_rs_num_queue.append(i)
+                            # print("active_rs_num = ", self.active_rs_num)
+
+                            self.tail = i+1
+
+                            rs[i].addr=rs[i].src_value[1]+rs[i].offset
+                            flag = False
+                            # Ld
+                            if rs[i].instruction_type == 1:
+
+                                for k in range(len(rs)):
+                                    if rs[k].addr == rs[i].addr and i!=k:
+                                        flag = True
+
+                                # The value can be found in LSQ
+                                if flag == True:
+                                    rs[i].value = rs[k].value
+                                    rs[i].dest_value = rs[k].value
+                                    processor.instruction_final_table[rs[i].instruction_id][2]=self.finish_cycle
+                                    self.wbing_cycle = self.finish_cycle + 1
+                                # Cannot be found in LSQ
+                                else:
+                                    rs[i].value = processor.MEM[rs[i].addr]
+                                    rs[i].dest_value = rs[k].value
+                                    processor.instruction_final_table[rs[i].instruction_id][2] = self.finish_cycle+ self.config.mem_cycles
+                                # rs[i].dest_value = rs[i].src_value[0] - rs[i].src_value[1]
+                                    self.wbing_cycle = self.finish_cycle + self.config.mem_cycles+1
+                            # Sd
+                            elif rs[i].instruction_type == 2:
+
+                                rs[i].value = rs[i].src_value[0]
+
+                                processor.MEM[rs[i].addr] = rs[i].value
+
+                                # rs[i].dest_value = rs[i].src_value[0] + rs[i].src_value[1]
+                                self.wbing_cycle = self.finish_cycle+self.config.mem_cycles
+                            # if rs[i].instruction_type == 4 or rs[i].instruction_type == 3:
+                            #     rs[i].clear()
+                            #     self.wbing_cycle = 0
+                                # processor.BTB[rs[i].instruction_index % 8].issue_enable = True
+
                             print("start cycle:", self.start_cycle)
                             print("finish cycle:", self.finish_cycle)
+
                             break
             print("--------------",self.fu_index,"Adder EXEC End:-------------------\n")
             # elif self.busy == True:
@@ -402,9 +450,11 @@ class LSQ_Adder:
                 print(" Adder.busy:")
                 if self.wbing_cycle == current_cycle:
                     print("     WB cycle:", current_cycle)
-
+                    self.active_rs_num=self.active_rs_num_queue[0]
+                    print("     active num:", self.active_rs_num)
                     # Successfully drop it to CDB
                     if processor.CDB.put_to_buffer(rs, self.active_rs_num, self.fu_index, current_cycle) == True:
+                        self.active_rs_num_queue.pop(0)
                         self.busy = False
                         # release current RS entry after the WB task has been dropped to CDB
                         # self.rs[self.active_rs_num].in_use = False
@@ -466,6 +516,8 @@ class PipelinedFU:
         self.rs = rs
         self.exeQueue = Queue()
         self.function = function       # 1 for sum, 2 for mul
+        self.active_rs_num_queue=list()
+        self.tail = 0
 
     def print_config(self):
         print("Pipielined FU config:")
@@ -486,21 +538,22 @@ class PipelinedFU:
                 # for i in range(len(self.config.rs_number)):
                 # for i, rs in enumerate(rs):
                 # Find an entry in my RS that all dependencies are ready for Execution
-                for i in range(len(rs)):
+                for k in range(self.tail, self.tail + len(rs)):
+                    i = k % len(rs)
                     print("rs[",i, "] is in use",rs[i].in_use)
                     if rs[i].in_use == True:
 
-                        for j in [0,1]:
-                            if rs[i].src_ready[j] == False and rs[i].src_addr[j] > 63:
-                                if processor.ROB[rs[i].src_addr[j]].idle == True:
-                                    rs[i].src_ready[j] = True
-                                    addr = processor.RAT[processor.ROB[rs[i].src_addr[j]].pointer]
-                                    rs[i].src_addr[j] = addr
-                                    print("addr is",addr)
-                                    if addr < 32:
-                                        rs[i].src_value[j] = processor.ARF.reg_int[addr]
-                                    if  addr >= 32 and addr < 64:
-                                        rs[i].src_value[j] = processor.ARF.reg_float[addr - 32]
+                        # for j in [0,1]:
+                        #     if rs[i].src_ready[j] == False and rs[i].src_addr[j] > 63:
+                        #         if processor.ROB[rs[i].src_addr[j]].idle == True:
+                        #             rs[i].src_ready[j] = True
+                        #             addr = processor.RAT[processor.ROB[rs[i].src_addr[j]].pointer]
+                        #             rs[i].src_addr[j] = addr
+                        #             print("addr is",addr)
+                        #             if addr < 32:
+                        #                 rs[i].src_value[j] = processor.ARF.reg_int[addr]
+                        #             if  addr >= 32 and addr < 64:
+                        #                 rs[i].src_value[j] = processor.ARF.reg_float[addr - 32]
 
                         if rs[i].src_ready == [True, True] and current_cycle >= rs[i].rdy2exe_cycle:    # start an addition operation
                             # Add current cycle as the execution cycle of corresponding instruction
@@ -514,8 +567,12 @@ class PipelinedFU:
                             pipelineinfo.start_cycle = current_cycle
                             # print(self.config.ex_cycles)
                             pipelineinfo.finish_cycle = current_cycle + self.config.ex_cycles
-                            pipelineinfo.active_rs_num = rs[i].index
-                            print("active_rs_num = ", pipelineinfo.active_rs_num)
+                            # pipelineinfo.active_rs_num = rs[i].index
+                            self.active_rs_num_queue.append(i)
+                            # print("active_rs_num = ", pipelineinfo.active_rs_num)
+
+                            self.tail = i + 1
+
                             if self.function == 1:          # Add
                                 if rs[i].instruction_type == 9:
                                     rs[i].dest_value = rs[i].src_value[0] - rs[i].src_value[1]
@@ -560,9 +617,18 @@ class PipelinedFU:
             if self.exeQueue.currentsize() > 0:
                 if self.exeQueue.queryfirstelement().wbing_cycle == current_cycle:
                     print("     WB cycle:", current_cycle)
+
+
+
                     currentExe = self.exeQueue.queryfirstelement()
+
+                    currentExe.active_rs_num = self.active_rs_num_queue[0]
+                    # print("     active num:", self.active_rs_num)
+
+
                     # Successfully drop it to CDB
                     if processor.CDB.put_to_buffer(rs, currentExe.active_rs_num, self.fu_index, current_cycle) == True:
+                        self.active_rs_num_queue.pop(0)
                         self.busy = False
                         # release current RS entry after the WB task has been dropped to CDB
                         # self.rs[self.active_rs_num].in_use = False
@@ -579,6 +645,7 @@ class PipelinedFU:
 
 class buffer_entry:
     inst_id = -1        # Issue sequence of Inst
+    inst_type = -1
     inst_wb_cycle = -1  # wbing cycle, for arbiter
     dest_addr = -1
     dest_value = -1          # list cannot be initialized here!
@@ -629,6 +696,7 @@ class CDB:
         temp.inst_id = rs[active_rs_number].instruction_id         # the unique ID of each Issed instruction
         temp.dest_addr = rs[active_rs_number].dest_addr
         temp.dest_value = rs[active_rs_number].dest_value
+        temp.inst_type = rs[active_rs_number].instruction_type
         temp.fu_index = fu_index
         temp.rs = rs                             # Get the whole RS table of the FU
         temp.active_rs_number = active_rs_number
@@ -685,9 +753,13 @@ class CDB:
 
             # Add current cycle as the WB cycle of corresponding instruction
             print("processor.ROB[rob_entry].instruction_index is",processor.ROB[rob_entry].instruction_index)
-            processor.instruction_final_table[processor.ROB[rob_entry].instruction_ID][3] = current_cycle
+            if temp[0].inst_type == 3 or temp[0].inst_type == 4:
+                processor.instruction_final_table[processor.ROB[rob_entry].instruction_ID][3]= -1
+                processor.ROB[rob_entry].value_rdy2commit_cycle = current_cycle
+            else:
+                processor.instruction_final_table[processor.ROB[rob_entry].instruction_ID][3] = current_cycle
+                processor.ROB[rob_entry].value_rdy2commit_cycle = current_cycle + 1
 
-            processor.ROB[rob_entry].value_rdy2commit_cycle = current_cycle + 1
             print("ROB", rob_entry, "updated to:", processor.ROB[rob_entry].reg_value,
                   processor.ROB[rob_entry].value_ready,
                   processor.ROB[rob_entry].value_rdy2commit_cycle)
@@ -802,7 +874,7 @@ class Processor(object):
         # self.RAT.append(1)
         # print(self.RAT[0])
         # print(self.RAT.__len__())
-        self.MEM = MEM(mem_val)
+        self.MEM = mem_val
 
         # read processor configuration
         self.config = ProcessorConfig()
@@ -854,7 +926,7 @@ class Processor(object):
         self.Integer_Adder = [Adder(self.config.adder, i, self.RS_Integer_Adder[i]) for i in range(self.config.adder.fu_number)]
         self.FP_Adder = [PipelinedFU(self.config.fpadder, j, self.RS_Float_Adder[j-self.config.adder.fu_number], 1) for j in range(self.config.adder.fu_number,self.config.adder.fu_number+self.config.fpadder.fu_number)]
         self.FP_Mul = [PipelinedFU(self.config.fpmul, k, self.RS_Float_Mul[k-self.config.adder.fu_number-self.config.fpadder.fu_number], 2) for k in range(self.config.adder.fu_number+self.config.fpadder.fu_number, self.config.adder.fu_number+self.config.fpadder.fu_number+self.config.fpmul.fu_number)]
-        # self.LSQ_Adder = [LSQ_Adder(self.config.ldst, g, self.LSQ_Adder[g-(self.config.adder.fu_number+self.config.fpadder.fu_number+self.config.fpmul.fu_number)]) for g in range(self.config.adder.fu_number+self.config.fpadder.fu_number+self.config.fpmul.fu_number,self.config.adder.fu_number+self.config.fpadder.fu_number+self.config.fpmul.fu_number+self.config.ldst.fu_number)]
+        self.LSQ_Integer_Adder = [LSQ_Adder(self.config.ldst, g, self.RS_LSQ[g-(self.config.adder.fu_number+self.config.fpadder.fu_number+self.config.fpmul.fu_number)]) for g in range(self.config.adder.fu_number+self.config.fpadder.fu_number+self.config.fpmul.fu_number,self.config.adder.fu_number+self.config.fpadder.fu_number+self.config.fpmul.fu_number+self.config.ldst.fu_number)]
         # self.adder.print_config()
         # self.adder.operation(self.cycle)
 
@@ -866,7 +938,7 @@ class Processor(object):
         self.inst_ID_last = 0
 
         # TODO: number of FUs, each buffer size
-        self.CDB = CDB(self.config.adder.fu_number+self.config.fpadder.fu_number+self.config.fpmul.fu_number, 1)
+        self.CDB = CDB(self.config.adder.fu_number+self.config.fpadder.fu_number+self.config.fpmul.fu_number+self.config.ldst.fu_number, 1)
 
         # TheQueue = Queue()
         # TheQueue.addtoq(self.CDB)
@@ -939,28 +1011,30 @@ class Processor(object):
             print("current Inst type=", self.inst_list[self.inst_issue_index].inst)
             print("current parsed instruction=", self.inst_issue_index, "current Issued Instruction=",
                   self.inst_ID_last)
-            if self.ifbranch(
-                    self.inst_issue_index) == True:  # determine if it is a branch instruction#############################
-                if self.BTB[
-                    self.inst_issue_index].issue_enable == True:  ########## prevent further redundant issue ###########
-                    if self.issue_one_inst(self.inst_list[self.inst_issue_index]) == 0:
-                        # self.inst_ID_last = self.inst_ID_last - 1 ###############making the issued ID and parsed ID consistant
-                        print("Issue Inst", self.inst_issue_index, self.inst_list[self.inst_issue_index].str, "succeed")
+            if self.ifbranch(self.inst_issue_index) == True:  # determine if it is a branch instruction#############################
+                if self.BTB[self.inst_issue_index].empty == True:  # find out if BTB entry is empty##################################################
+                    if self.BTB[self.inst_issue_index].issue_enable == True:  ########## prevent further redundant issue ###########
+                        if self.issue_one_inst(self.inst_list[self.inst_issue_index]) == 0:
+                            self.BTB[self.inst_issue_index].issue_enable = False  ########## prevent further redundant issue ###########
+                            self.BTB_add_entry(self.inst_issue_index, self.inst_list[
+                                self.inst_issue_index].offset)  # add entry#############################
+                            print("Issue Inst", self.inst_issue_index, self.inst_list[self.inst_issue_index].str,
+                                  "succeed")
+                        else:
+                            print("wait for the new BTB entry to be ready after EXE")
                 else:
-                    print("wait for the new BTB entry to be ready after EXE")
-                if self.BTB[
-                    self.inst_issue_index].empty == True:  # find out if BTB entry is empty##################################################
-                    self.BTB[
-                        self.inst_issue_index].issue_enable = False  ########## prevent further redundant issue ###########
-                    self.BTB_add_entry(self.inst_issue_index, self.inst_list[
-                        self.inst_issue_index].offset)  # add entry#############################
-                else:
-                    self.BTB[self.inst_issue_index].issue_enable = True
-                    self.BTB_lookup(
-                        self.inst_issue_index)  ##################determine the next instruction##################################
+                    if self.BTB[self.inst_issue_index].issue_enable == True:  ########## prevent further redundant issue ###########
+                        if self.issue_one_inst(self.inst_list[self.inst_issue_index]) == 0:
+                            self.BTB_lookup(self.inst_issue_index)  ##################determine the next instruction##################################
+                            print("Issue Inst", self.inst_issue_index, self.inst_list[self.inst_issue_index].str,
+                                  "succeed")
+                        else:
+                            print("wait for the new BTB entry to be ready after EXE")
+                    else:
+                        self.BTB[self.inst_issue_index].issue_enable = True
+                        self.BTB_lookup(self.inst_issue_index)  ##################determine the next instruction##################################
                     # self.inst_ID_last = self.inst_ID_last + 1 ###############making the issued ID and parsed ID consistant
-                # print("BTB_next_pc=",self.BTB[self.inst_issue_index].next_PC, "next_Instruction=",self.inst_issue_index, "next_issued_instr=",self.inst_ID_last)
-
+                    # print("BTB_next_pc=",self.BTB[self.inst_issue_index].next_PC, "next_Instruction=",self.inst_issue_index, "next_issued_instr=",self.inst_ID_last)
             else:
                 if self.issue_one_inst(self.inst_list[self.inst_issue_index]) == 0:
                     print("Issue Inst", self.inst_issue_index, self.inst_list[self.inst_issue_index].str, "succeed")
@@ -1037,6 +1111,8 @@ class Processor(object):
                         # 2.3 Update RS
                         self.RS_LSQ[j][i].in_use = True
                         self.RS_LSQ[j][i].instruction_type = inst.inst
+                        self.RS_Integer_Adder[j][i].dest_addr = ROB_no + 64
+                        self.RS_Integer_Adder[j][i].dest_value = -1
                         self.RS_LSQ[j][i].offset = inst.offset
                         self.RS_LSQ[j][i].instruction_index = inst.index
                         self.RS_LSQ[j][i].instruction_id = inst.ID
@@ -1053,26 +1129,26 @@ class Processor(object):
 
                         # If both source is in ARF
                         if (src_F < 64 and src_R < 64):
-                            self.RS_Integer_Adder[j][i].src_ready = [True, True]
-                            self.RS_Integer_Adder[j][i].src_value = [self.ARF.reg_float[src_F-32],
+                            self.RS_LSQ[j][i].src_ready = [True, True]
+                            self.RS_LSQ[j][i].src_value = [self.ARF.reg_float[src_F-32],
                                                                      self.ARF.reg_int[src_R]]
 
                         # if source 0 is from ROB, source 1 is from ARF
                         if (src_F >= 64 and src_R < 64):
-                            self.RS_Integer_Adder[j][i].src_ready = [False, True]
-                            self.RS_Integer_Adder[j][i].src_value = [-1, self.ARF.reg_int[src_R]]
+                            self.RS_LSQ[j][i].src_ready = [False, True]
+                            self.RS_LSQ[j][i].src_value = [-1, self.ARF.reg_int[src_R]]
 
                         # if source 0 is from ARF, source 1 is from ROB
                         if (src_F < 64 and src_R >= 64):
-                            self.RS_Integer_Adder[j][i].src_ready = [True, False]
-                            self.RS_Integer_Adder[j][i].src_value = [self.ARF.reg_float[src_F-32], -1]
+                            self.RS_LSQ[j][i].src_ready = [True, False]
+                            self.RS_LSQ[j][i].src_value = [self.ARF.reg_float[src_F-32], -1]
 
                         # if both are from ROB
                         if (src_F >= 64 and src_R >= 64):
-                            self.RS_Integer_Adder[j][i].src_ready = [False, False]
-                            self.RS_Integer_Adder[j][i].src_value = [-1, -1]
+                            self.RS_LSQ[j][i].src_ready = [False, False]
+                            self.RS_LSQ[j][i].src_value = [-1, -1]
 
-                        self.RS_Integer_Adder[j][i].rdy2exe_cycle = self.cycle + 1
+                        self.RS_LSQ[j][i].rdy2exe_cycle = self.cycle + 1
 
                         flag = True
                         self.INDEX_LSQ = j + 1
@@ -1081,7 +1157,7 @@ class Processor(object):
                 if flag:
                     break
 
-            return 0
+            # return 0
         elif inst.inst == 3 or inst.inst == 4:
             flag = False
 
@@ -1492,6 +1568,8 @@ class Processor(object):
             self.FP_Adder[i].operation(self.cycle, WRITE_BACK, self)
         for i in range(self.config.fpmul.fu_number):
             self.FP_Mul[i].operation(self.cycle, WRITE_BACK, self)
+        for i in range(self.config.ldst.fu_number):
+            self.LSQ_Integer_Adder[i].operation(self.cycle, WRITE_BACK, self)
         print("-----------CDB Begin------------")
         self.CDB.arbiter(self)
         print("-----------CDB End--------------")
@@ -1504,6 +1582,8 @@ class Processor(object):
             self.FP_Adder[i].operation(self.cycle, EXEC, self)
         for i in range(self.config.fpmul.fu_number):
             self.FP_Mul[i].operation(self.cycle, EXEC, self)
+        for i in range(self.config.ldst.fu_number):
+            self.LSQ_Integer_Adder[i].operation(self.cycle, EXEC, self)
 
     def commit(self):  # pc 1103
         print("-------------Commit begin:----------------")
