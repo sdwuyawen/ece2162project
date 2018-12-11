@@ -244,9 +244,13 @@ class Adder:
                                 print("predict =", predict)
                                 print("branch rs[i].dest_value=", rs[i].dest_value, "rs[i].instruction_type=",
                                       rs[i].instruction_type)
-                                processor.BTB_predict(rs[i].instruction_index,
-                                                      predict)  # predict iftaken and validate new BTB entry###################################
+                                processor.BTB_predict(rs[i].instruction_index,predict)  # predict iftaken and validate new BTB entry###################################
                                 processor.BTB[rs[i].instruction_index % 8].empty = False
+
+                                # if processor.BTB[rs[i].instruction_index % 8].empty == True:
+                                #     processor.BTB[rs[i].instruction_index % 8].empty = False
+                                #     processor.BTB[processor.inst_issue_index].issue_enable = True
+                                #     processor.BTB_lookup(processor.inst_issue_index)  ##################determine the next instruction##################################
                             # if rs[i].instruction_type == 4 or rs[i].instruction_type == 3:
                             #     rs[i].clear()
                             #     self.wbing_cycle = 0
@@ -353,15 +357,15 @@ class LSQ_Adder:
                     if rs[i].in_use == True and rs[i].instruction_id != -1:
                         print("rs[", i, "] src_ready is", rs[i].src_ready)
 
-                        for j in [0,1]:
-                            if rs[i].src_ready[j] == False and rs[i].src_addr[j] > 63:
-                                if processor.ROB[rs[i].src_addr[j]].idle == True:
-                                    rs[i].src_ready[j] = True
-                                    addr = processor.RAT[processor.ROB[rs[i].src_addr[j]].pointer]
-                                    rs[i].src_addr[j] = addr
-                                    print("addr is",addr)
-                                    if addr < 32:
-                                        rs[i].src_value[j] = processor.ARF.reg_int[addr]
+                        # for j in [0,1]:
+                        #     if rs[i].src_ready[j] == False and rs[i].src_addr[j] > 63:
+                        #         if processor.ROB[rs[i].src_addr[j]].idle == True:
+                        #             rs[i].src_ready[j] = True
+                        #             addr = processor.RAT[processor.ROB[rs[i].src_addr[j]].pointer]
+                        #             rs[i].src_addr[j] = addr
+                        #             print("addr is",addr)
+                        #             if addr < 32:
+                        #                 rs[i].src_value[j] = processor.ARF.reg_int[addr]
                                     # elif  addr >= 32 and addr < 64:
                                     #     rs[i].src_value[j] = processor.ARF.reg_float[addr % 32]
 
@@ -392,7 +396,7 @@ class LSQ_Adder:
                                         flag = True
 
                                 # The value can be found in LSQ
-                                if flag == True:
+                                if flag == True and rs[i].instruction_type == 2:
                                     rs[i].value = rs[k].value
                                     rs[i].dest_value = rs[k].value
                                     processor.instruction_final_table[rs[i].instruction_id][2]=self.finish_cycle
@@ -401,9 +405,9 @@ class LSQ_Adder:
                                 else:
                                     rs[i].value = processor.MEM[rs[i].addr]
                                     rs[i].dest_value = rs[k].value
-                                    processor.instruction_final_table[rs[i].instruction_id][2] = self.finish_cycle+ self.config.mem_cycles
+                                    processor.instruction_final_table[rs[i].instruction_id][2] = self.finish_cycle+ self.config.mem_cycles-1
                                 # rs[i].dest_value = rs[i].src_value[0] - rs[i].src_value[1]
-                                    self.wbing_cycle = self.finish_cycle + self.config.mem_cycles+1
+                                    self.wbing_cycle = self.finish_cycle + self.config.mem_cycles
                             # Sd
                             elif rs[i].instruction_type == 2:
 
@@ -445,7 +449,7 @@ class LSQ_Adder:
             # TODO: for memory store inst STR R1, R2(0), its LSQ entry is enqueued when the STR is issued, and dequeued when the commit is finished
             # The memory address is calculated in Ex stage. When R1 is ready to the LSQ, it broadcasts to all LSQ entry (Load) pending the memory address R2+0.
             # When R2 is ready, the memory address is calculated, and it broadcasts to all LSQ entry (Load) pending the memory address R2+0
-            print("\n-------------",self.fu_index,"Adder WB Begin:----------------")
+            print("\n-------------",self.fu_index,"LSQ Adder WB Begin:----------------")
             if self.busy == True:
                 print(" Adder.busy:")
                 if self.wbing_cycle == current_cycle:
@@ -464,7 +468,7 @@ class LSQ_Adder:
                         self.active_rs_num = -1
                     else:
                         print("Drop to CDB failed. FU is kept busy")
-            print("-------------",self.fu_index,"Adder WB End:----------------\n")
+            print("-------------",self.fu_index,"LSQ Adder WB End:----------------\n")
 
 class Queue:
     def __init__(self):
@@ -757,12 +761,13 @@ class CDB:
                 processor.instruction_final_table[processor.ROB[rob_entry].instruction_ID][3]= -1
                 processor.ROB[rob_entry].value_rdy2commit_cycle = current_cycle
             else:
+                print("ID", processor.ROB[rob_entry].instruction_ID)
                 processor.instruction_final_table[processor.ROB[rob_entry].instruction_ID][3] = current_cycle
                 processor.ROB[rob_entry].value_rdy2commit_cycle = current_cycle + 1
 
             print("ROB", rob_entry, "updated to:", processor.ROB[rob_entry].reg_value,
-                  processor.ROB[rob_entry].value_ready,
-                  processor.ROB[rob_entry].value_rdy2commit_cycle)
+            processor.ROB[rob_entry].value_ready,
+            processor.ROB[rob_entry].value_rdy2commit_cycle)
 
             # update all the rs that pending this value
             # for i, rs in enumerate(rs):
@@ -1009,15 +1014,13 @@ class Processor(object):
         print("\ninst list not empty")
         if self.inst_issue_index <= self.inst_num - 1:
             print("current Inst type=", self.inst_list[self.inst_issue_index].inst)
-            print("current parsed instruction=", self.inst_issue_index, "current Issued Instruction=",
-                  self.inst_ID_last)
+            print("current parsed instruction=", self.inst_issue_index, "current Issued Instruction=",self.inst_ID_last)
             if self.ifbranch(self.inst_issue_index) == True:  # determine if it is a branch instruction#############################
                 if self.BTB[self.inst_issue_index].empty == True:  # find out if BTB entry is empty##################################################
                     if self.BTB[self.inst_issue_index].issue_enable == True:  ########## prevent further redundant issue ###########
                         if self.issue_one_inst(self.inst_list[self.inst_issue_index]) == 0:
                             self.BTB[self.inst_issue_index].issue_enable = False  ########## prevent further redundant issue ###########
-                            self.BTB_add_entry(self.inst_issue_index, self.inst_list[
-                                self.inst_issue_index].offset)  # add entry#############################
+                            self.BTB_add_entry(self.inst_issue_index, self.inst_list[self.inst_issue_index].offset)  # add entry#############################
                             print("Issue Inst", self.inst_issue_index, self.inst_list[self.inst_issue_index].str,
                                   "succeed")
                         else:
@@ -1026,8 +1029,7 @@ class Processor(object):
                     if self.BTB[self.inst_issue_index].issue_enable == True:  ########## prevent further redundant issue ###########
                         if self.issue_one_inst(self.inst_list[self.inst_issue_index]) == 0:
                             self.BTB_lookup(self.inst_issue_index)  ##################determine the next instruction##################################
-                            print("Issue Inst", self.inst_issue_index, self.inst_list[self.inst_issue_index].str,
-                                  "succeed")
+                            print("Issue Inst", self.inst_issue_index, self.inst_list[self.inst_issue_index].str,"succeed")
                         else:
                             print("wait for the new BTB entry to be ready after EXE")
                     else:
@@ -1042,6 +1044,131 @@ class Processor(object):
                 else:
                     print("Issue Inst", self.inst_issue_index, "failed")
 
+    def back_2_issue(self):
+        print("\ninst list not empty")
+        if self.inst_issue_index <= self.inst_num - 1:
+            print("current Inst type=", self.inst_list[self.inst_issue_index].inst)
+            print("current parsed instruction=", self.inst_issue_index, "current Issued Instruction=",
+                  self.inst_ID_last)
+            if self.ifbranch(
+                    self.inst_issue_index) == True:  # determine if it is a branch instruction#############################
+                if self.BTB[
+                    self.inst_issue_index].empty == True:  # find out if BTB entry is empty##################################################
+                    if self.BTB[
+                        self.inst_issue_index].issue_enable == True:  ########## prevent further redundant issue ###########
+                        if self.issue_one_inst(self.inst_list[self.inst_issue_index]) == 0:
+                            print("fist branch issue succeed")
+                            self.BTB[
+                                self.inst_issue_index].issue_enable = False  ########## prevent further redundant issue ###########
+                            self.BTB_add_entry(self.inst_issue_index, self.inst_list[
+                                self.inst_issue_index].offset)  # add entry#############################
+                            print("Issue Inst", self.inst_issue_index, self.inst_list[self.inst_issue_index].str,
+                                  "succeed")
+                        else:
+                            print("wait for the new BTB entry to be ready after EXE")
+                else:
+                    if self.issue_one_inst(self.inst_list[self.inst_issue_index]) == 0:
+                        self.BTB[self.inst_issue_index].issue_enable = True
+                        self.BTB_lookup(
+                            self.inst_issue_index)  ##################determine the next instruction##################################
+                        print("Issue Inst", self.inst_issue_index, self.inst_list[self.inst_issue_index].str, "succeed")
+                    else:
+                        print("wait for the new BTB entry to be ready after EXE")
+                    # self.inst_ID_last = self.inst_ID_last + 1 ###############making the issued ID and parsed ID consistant
+                    # print("BTB_next_pc=",self.BTB[self.inst_issue_index].next_PC, "next_Instruction=",self.inst_issue_index, "next_issued_instr=",self.inst_ID_last)
+            else:
+                if self.issue_one_inst(self.inst_list[self.inst_issue_index]) == 0:
+                    print("Issue Inst", self.inst_issue_index, self.inst_list[self.inst_issue_index].str, "succeed")
+                    self.inst_issue_index += 1  # need stall function  solved
+                else:
+                    print("Issue Inst", self.inst_issue_index, "failed")
+
+    def back_issue(self):
+        print("\ninst list not empty")
+        if self.inst_issue_index <= self.inst_num - 1:
+            print("current Inst type=", self.inst_list[self.inst_issue_index].inst)
+            print("current parsed instruction=", self.inst_issue_index, "current Issued Instruction=",
+                  self.inst_ID_last)
+            if self.ifbranch(
+                    self.inst_issue_index) == True:  # determine if it is a branch instruction#############################
+                if self.BTB[
+                    self.inst_issue_index].empty == True:  # find out if BTB entry is empty##################################################
+                    if self.BTB[
+                        self.inst_issue_index].issue_enable == True:  ########## prevent further redundant issue ###########
+                        if self.issue_one_inst(self.inst_list[self.inst_issue_index]) == 0:
+                            print("fist branch issue succeed")
+                            self.BTB[
+                                self.inst_issue_index].issue_enable = False  ########## prevent further redundant issue ###########
+                            self.BTB_add_entry(self.inst_issue_index, self.inst_list[
+                                self.inst_issue_index].offset)  # add entry#############################
+                            print("Issue Inst", self.inst_issue_index, self.inst_list[self.inst_issue_index].str,
+                                  "succeed")
+                        else:
+                            print("wait for the new BTB entry to be ready after EXE")
+                else:
+                    if self.BTB[
+                        self.inst_issue_index].issue_enable == True:  ########## prevent further redundant issue ###########
+                        if self.issue_one_inst(self.inst_list[self.inst_issue_index]) == 0:
+                            self.BTB_lookup(
+                                self.inst_issue_index)  ##################determine the next instruction##################################
+                            print("Issue Inst", self.inst_issue_index, self.inst_list[self.inst_issue_index].str,
+                                  "succeed")
+                        else:
+                            print("wait for the new BTB entry to be ready after EXE")
+                    # self.inst_ID_last = self.inst_ID_last + 1 ###############making the issued ID and parsed ID consistant
+                    # print("BTB_next_pc=",self.BTB[self.inst_issue_index].next_PC, "next_Instruction=",self.inst_issue_index, "next_issued_instr=",self.inst_ID_last)
+            else:
+                if self.issue_one_inst(self.inst_list[self.inst_issue_index]) == 0:
+                    print("Issue Inst", self.inst_issue_index, self.inst_list[self.inst_issue_index].str, "succeed")
+                    self.inst_issue_index += 1  # need stall function  solved
+                else:
+                    print("Issue Inst", self.inst_issue_index, "failed")
+
+    def issue_new(self):
+        print("\ninst list not empty")
+        if self.inst_issue_index <= self.inst_num - 1:
+            print("current Inst type=", self.inst_list[self.inst_issue_index].inst)
+            print("current parsed instruction=", self.inst_issue_index, "current Issued Instruction=",
+                  self.inst_ID_last)
+            if self.ifbranch(
+                    self.inst_issue_index) == True:  # determine if it is a branch instruction#############################
+                if self.BTB[
+                    self.inst_issue_index].empty == True:  # find out if BTB entry is empty##################################################
+                    if self.BTB[
+                        self.inst_issue_index].issue_enable == True:  ########## prevent further redundant issue ###########
+                        if self.issue_one_inst(self.inst_list[self.inst_issue_index]) == 0:
+                            print("fist branch issue succeed")
+                            self.BTB[
+                                self.inst_issue_index].issue_enable = False  ########## prevent further redundant issue ###########
+                            self.BTB_add_entry(self.inst_issue_index, self.inst_list[
+                                self.inst_issue_index].offset)  # add entry#############################
+                            print("Issue Inst", self.inst_issue_index, self.inst_list[self.inst_issue_index].str,
+                                  "succeed")
+                        else:
+                            print("wait for the new BTB entry to be ready after EXE")
+                else:
+                    if self.BTB[
+                        self.inst_issue_index].issue_enable == True:  ########## prevent further redundant issue ###########
+                        if self.issue_one_inst(self.inst_list[self.inst_issue_index]) == 0:
+                            self.BTB_lookup(
+                                self.inst_issue_index)  ##################determine the next instruction##################################
+                            print("Issue Inst", self.inst_issue_index, self.inst_list[self.inst_issue_index].str,
+                                  "succeed")
+                        else:
+                            print("wait for the new BTB entry to be ready after EXE")
+                    else:
+                        self.BTB[self.inst_issue_index].issue_enable = True
+                        if self.issue_one_inst(self.inst_list[self.inst_issue_index]) == 0:
+                            self.BTB_lookup(
+                                self.inst_issue_index)  ##################determine the next instruction##################################
+                    # self.inst_ID_last = self.inst_ID_last + 1 ###############making the issued ID and parsed ID consistant
+                    # print("BTB_next_pc=",self.BTB[self.inst_issue_index].next_PC, "next_Instruction=",self.inst_issue_index, "next_issued_instr=",self.inst_ID_last)
+            else:
+                if self.issue_one_inst(self.inst_list[self.inst_issue_index]) == 0:
+                    print("Issue Inst", self.inst_issue_index, self.inst_list[self.inst_issue_index].str, "succeed")
+                    self.inst_issue_index += 1  # need stall function  solved
+                else:
+                    print("Issue Inst", self.inst_issue_index, "failed")
 
     def issue_one_inst(self, inst):
         print(whoami())
@@ -1080,6 +1207,7 @@ class Processor(object):
 
         # BEN and BEQ
         # TODO offset should be added
+        # Ld and Sd
         if inst.inst == 1 or inst.inst == 2:
 
             print("RS LSQ number is", len(self.RS_LSQ))
@@ -1089,7 +1217,7 @@ class Processor(object):
                 print("input j is", j)
 
                 for i in range(0, len(self.RS_LSQ[j])):
-                    print("self.RS_Integer_Adder[", j, "][", i, "].in_use is", self.RS_LSQ[j][i].in_use)
+                    print("self.RS_LSQ_Adder[", j, "][", i, "].in_use is", self.RS_LSQ[j][i].in_use)
                     if self.RS_LSQ[j][i].in_use == False:
 
                         RS_no = i
@@ -1100,8 +1228,8 @@ class Processor(object):
 
                         # 2.1 Update ROB
                         # self.ROB[rob_entry_no].reg_number = inst.dest
-                        # self.ROB[rob_entry_no].idle = False
-                        # self.ROB[rob_entry_no].instruction_index = inst.index
+                        self.ROB[rob_entry_no].idle = False
+                        self.ROB[rob_entry_no].instruction_index = inst.index
 
                         # 2.2 Update RAT
                         # RAT with dest 0-63 points to ARF
@@ -1111,8 +1239,8 @@ class Processor(object):
                         # 2.3 Update RS
                         self.RS_LSQ[j][i].in_use = True
                         self.RS_LSQ[j][i].instruction_type = inst.inst
-                        self.RS_Integer_Adder[j][i].dest_addr = ROB_no + 64
-                        self.RS_Integer_Adder[j][i].dest_value = -1
+                        self.RS_LSQ[j][i].dest_addr = ROB_no + 64
+                        self.RS_LSQ[j][i].dest_value = -1
                         self.RS_LSQ[j][i].offset = inst.offset
                         self.RS_LSQ[j][i].instruction_index = inst.index
                         self.RS_LSQ[j][i].instruction_id = inst.ID
@@ -1158,6 +1286,7 @@ class Processor(object):
                     break
 
             # return 0
+        # BEN and BEQ
         elif inst.inst == 3 or inst.inst == 4:
             flag = False
 
