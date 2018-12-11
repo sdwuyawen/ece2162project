@@ -127,7 +127,6 @@ class LSQ:
         self.type = "N" # set to be L/S
         self.addr = -1
         self.value = -1
-        self.value = -1
 
 
         self.index = 0
@@ -136,7 +135,7 @@ class LSQ:
         self.instruction_id = -1
         self.offset = -1
         self.id = -1
-        self.src_FR_addr = [-1, -1]
+        self.src_addr = [-1, -1]
         self.src_ready = [False, False]
         self.src_value = [-1, -1]
         self.rdy2exe_cycle = -1
@@ -192,7 +191,7 @@ class Adder:
                         print("rs[", i, "] src_ready is", rs[i].src_ready)
 
                         for j in [0,1]:
-                            if rs[i].src_ready[j] == False:
+                            if rs[i].src_ready[j] == False and rs[i].src_addr[j] > 63:
                                 if processor.ROB[rs[i].src_addr[j]].idle == True:
                                     rs[i].src_ready[j] = True
                                     addr = processor.RAT[processor.ROB[rs[i].src_addr[j]].pointer]
@@ -266,6 +265,126 @@ class Adder:
                         print("Drop to CDB failed. FU is kept busy")
             print("-------------",self.fu_index,"Adder WB End:----------------\n")
 
+class LSQ_Adder:
+    # adder_rs_number = 0
+
+    def __init__(self, adder_config, FU_index, rs):
+        print("instantiate adder")
+        self.config = adder_config
+        # self.rs = [ReservationStation() for i in range(self.config.rs_number)]
+        # for i in range(0, 3):
+        # for i, rs in enumerate(self.rs):
+        #     self.rs.index = i
+        # print("rs number", rs.__len__())
+        self.busy = False
+        # self.wbing_value = -1
+        self.wbing_cycle = -1
+        self.active_rs_num = -1
+        self.start_cycle = -1
+        self.finish_cycle = -1
+        self.fu_index = FU_index # to indicate the ID of this FU. For CDB use
+        self.rs = rs
+
+    def print_config(self):
+        print("adder config:")
+        print("# of rs /", "Cycles in EX /", "Cycles in Mem /", "# of FUs /")
+        print(self.config.name, self.config.rs_number, self.config.ex_cycles, self.config.mem_cycles, self.config.fu_number)
+
+    def operation(self, current_cycle, operation, processor):
+        # print(whoami())
+        print(processor)
+        rs = self.rs
+        print("adder operation in cycle:", current_cycle)
+
+
+
+        # print("processor cycle: ", current_cycle)
+        if operation == EXEC:
+            print("--------------",self.fu_index,"Adder EXEC Begin:-------------------")
+            if self.busy == False:
+                print(" Adder got:")
+                # for i in range(len(self.config.rs_number)):
+                # for i, rs in enumerate(rs):
+                # Find an entry in my RS that all dependencies are ready for Execution
+                for i in range(len(rs)):
+                    print("rs[",i, "] is in use",rs[i].in_use)
+                    if rs[i].in_use == True:
+                        print("rs[", i, "] src_ready is", rs[i].src_ready)
+
+                        for j in [0,1]:
+                            if rs[i].src_ready[j] == False and rs[i].src_addr[j] > 63:
+                                if processor.ROB[rs[i].src_addr[j]].idle == True:
+                                    rs[i].src_ready[j] = True
+                                    addr = processor.RAT[processor.ROB[rs[i].src_addr[j]].pointer]
+                                    rs[i].src_addr[j] = addr
+                                    print("addr is",addr)
+                                    if addr < 32:
+                                        rs[i].src_value[j] = processor.ARF.reg_int[addr]
+                                    # elif  addr >= 32 and addr < 64:
+                                    #     rs[i].src_value[j] = processor.ARF.reg_float[addr % 32]
+
+                        if rs[i].src_ready == [True, True] and current_cycle >= rs[i].rdy2exe_cycle:    # start an addition operation
+                            # Add current cycle as the execution cycle of corresponding instruction
+                            print ("final table", processor.instruction_final_table[0])
+                            processor.instruction_final_table[rs[i].instruction_id][1] = current_cycle
+                            print("inst index is", rs[i].instruction_index)
+                            self.busy = True
+                            print("     Adder occupied:", rs[i].instruction_type)
+                            # rs[i].src_ready = [False, False]
+                            self.start_cycle = current_cycle
+                            # print(self.config.ex_cycles)
+                            self.finish_cycle = current_cycle + self.config.ex_cycles
+                            self.active_rs_num = rs[i].index
+                            print("active_rs_num = ", self.active_rs_num)
+                            if rs[i].instruction_type == 8:
+                                rs[i].dest_value = rs[i].src_value[0] - rs[i].src_value[1]
+                            else:
+                                rs[i].dest_value = rs[i].src_value[0] + rs[i].src_value[1]
+                            self.wbing_cycle = self.finish_cycle
+                            print("start cycle:", self.start_cycle)
+                            print("finish cycle:", self.finish_cycle)
+                            break
+            print("--------------",self.fu_index,"Adder EXEC End:-------------------\n")
+            # elif self.busy == True:
+                # print("Adder busy:")
+                # if self.finish_cycle == current_cycle:  # exactly the cycle to write back
+                    # self.busy = False
+                    # print("adder:")
+                    # print("WBing in cycle: ", current_cycle)
+                    # self.rs[self.active_rs_num].in_use = False
+                    # self.active_rs_num = -1
+                    # self.wbing_cycle = current_cycle + 1
+                    # self.wbing_value = self.rs[self.active_rs_num].dest_value
+
+        # Before WB, the processor collect all the WB requests from FUs, and choose the inst with lowest ID
+#        elif operation == WRITE_BACK_CHECK:
+#            if self.busy == True:
+#                if self.wbing_cycle <= current_cycle:
+#                    processor.CDB.arbiter_q.append(rs[self.active_rs_num].instruction_id)
+
+        elif operation == WRITE_BACK:
+            # TODO: for memory load inst, its LSQ entry is cleared after getting value from memory or from previous load in LSQ
+            # TODO: for memory store inst STR R1, R2(0), its LSQ entry is enqueued when the STR is issued, and dequeued when the commit is finished
+            # The memory address is calculated in Ex stage. When R1 is ready to the LSQ, it broadcasts to all LSQ entry (Load) pending the memory address R2+0.
+            # When R2 is ready, the memory address is calculated, and it broadcasts to all LSQ entry (Load) pending the memory address R2+0
+            print("\n-------------",self.fu_index,"Adder WB Begin:----------------")
+            if self.busy == True:
+                print(" Adder.busy:")
+                if self.wbing_cycle == current_cycle:
+                    print("     WB cycle:", current_cycle)
+
+                    # Successfully drop it to CDB
+                    if processor.CDB.put_to_buffer(rs, self.active_rs_num, self.fu_index, current_cycle) == True:
+                        self.busy = False
+                        # release current RS entry after the WB task has been dropped to CDB
+                        # self.rs[self.active_rs_num].in_use = False
+                        print("fu index is ", self.fu_index,"active rs number is ",self.active_rs_num)
+                        rs[self.active_rs_num].clear()
+                        print("rs[", self.active_rs_num, "] released")
+                        self.active_rs_num = -1
+                    else:
+                        print("Drop to CDB failed. FU is kept busy")
+            print("-------------",self.fu_index,"Adder WB End:----------------\n")
 
 class Queue:
     def __init__(self):
@@ -340,6 +459,19 @@ class PipelinedFU:
                 for i in range(len(rs)):
                     print("rs[",i, "] is in use",rs[i].in_use)
                     if rs[i].in_use == True:
+
+                        for j in [0,1]:
+                            if rs[i].src_ready[j] == False and rs[i].src_addr[j] > 63:
+                                if processor.ROB[rs[i].src_addr[j]].idle == True:
+                                    rs[i].src_ready[j] = True
+                                    addr = processor.RAT[processor.ROB[rs[i].src_addr[j]].pointer]
+                                    rs[i].src_addr[j] = addr
+                                    print("addr is",addr)
+                                    if addr < 32:
+                                        rs[i].src_value[j] = processor.ARF.reg_int[addr]
+                                    if  addr >= 32 and addr < 64:
+                                        rs[i].src_value[j] = processor.ARF.reg_float[addr - 32]
+
                         if rs[i].src_ready == [True, True] and current_cycle >= rs[i].rdy2exe_cycle:    # start an addition operation
                             # Add current cycle as the execution cycle of corresponding instruction
                             processor.instruction_final_table[rs[i].instruction_id][1] = current_cycle
@@ -684,12 +816,12 @@ class Processor(object):
         self.Integer_Adder = [Adder(self.config.adder, i, self.RS_Integer_Adder[i]) for i in range(self.config.adder.fu_number)]
         self.FP_Adder = [PipelinedFU(self.config.fpadder, j, self.RS_Float_Adder[j-self.config.adder.fu_number], 1) for j in range(self.config.adder.fu_number,self.config.adder.fu_number+self.config.fpadder.fu_number)]
         self.FP_Mul = [PipelinedFU(self.config.fpmul, k, self.RS_Float_Mul[k-self.config.adder.fu_number-self.config.fpadder.fu_number], 2) for k in range(self.config.adder.fu_number+self.config.fpadder.fu_number, self.config.adder.fu_number+self.config.fpadder.fu_number+self.config.fpmul.fu_number)]
-
+        # self.LSQ_Adder = [LSQ_Adder(self.config.ldst, g, self.LSQ_Adder[g-(self.config.adder.fu_number+self.config.fpadder.fu_number+self.config.fpmul.fu_number)]) for g in range(self.config.adder.fu_number+self.config.fpadder.fu_number+self.config.fpmul.fu_number,self.config.adder.fu_number+self.config.fpadder.fu_number+self.config.fpmul.fu_number+self.config.ldst.fu_number)]
         # self.adder.print_config()
         # self.adder.operation(self.cycle)
 
         self.inst_num = num_inst
-        # print("proc inst num: ", self.inst_num)
+        # print("proc inst num: ", self.inst_num)s
         self.inst_list = inst_list
         self.inst_issue_index = 0
         # Instruction unique ID
@@ -765,6 +897,30 @@ class Processor(object):
         ID = 0
 
         # Load/Store inst
+
+
+        # 2.1 Check if the ROB has empty entry.
+        # If no, return -1
+        # If yes, go on to check RS
+        for i in range(self.ROB_head, self.ROB_head + self.ROB_num):
+            rob_entry_no = i % self.ROB_num
+            print("check ROB entry:", rob_entry_no)
+            if self.ROB[rob_entry_no].idle == True:
+                # only update ROB header when RS is also available
+                # self.ROB_header = (self.ROB_header+1) % self.ROB_num
+                ROB_no = rob_entry_no
+                flag = True
+                break
+
+        print("ROB head index is ", self.ROB_head)
+        if flag == False:
+            return -1
+
+
+        print("inst index is", inst.inst)
+
+        # BEN and BEQ
+        # TODO offset should be added
         if inst.inst == 1 or inst.inst == 2:
 
             print("RS LSQ number is", len(self.RS_LSQ))
@@ -798,8 +954,7 @@ class Processor(object):
                         self.RS_LSQ[j][i].instruction_type = inst.inst
                         self.RS_LSQ[j][i].offset = inst.offset
                         self.RS_LSQ[j][i].instruction_index = inst.index
-                        self.RS_LSQ[j][i].instruction_id = ID
-                        ID=ID+1
+                        self.RS_LSQ[j][i].instruction_id = inst.ID
 
                         src_F = self.RAT[inst.F+32]
                         print("src_0 is", src_F)
@@ -807,7 +962,7 @@ class Processor(object):
                         src_R = self.RAT[inst.R]
                         print("src_1 is", src_R)
 
-                        self.RS_LSQ[j][i].src_FR_addr = [src_F, src_R]
+                        self.RS_LSQ[j][i].src_addr = [src_F, src_R]
                         self.RS_LSQ[j][i].start_cycle = -1
                         self.RS_LSQ[j][i].finish_cycle = -1
 
@@ -825,7 +980,7 @@ class Processor(object):
                         # if source 0 is from ARF, source 1 is from ROB
                         if (src_F < 64 and src_R >= 64):
                             self.RS_Integer_Adder[j][i].src_ready = [True, False]
-                            self.RS_Integer_Adder[j][i].src_value = [self.ARF.reg_float[src_F], -1]
+                            self.RS_Integer_Adder[j][i].src_value = [self.ARF.reg_float[src_F-32], -1]
 
                         # if both are from ROB
                         if (src_F >= 64 and src_R >= 64):
@@ -842,30 +997,7 @@ class Processor(object):
                     break
 
             return 0
-
-        # 2.1 Check if the ROB has empty entry.
-        # If no, return -1
-        # If yes, go on to check RS
-        for i in range(self.ROB_head, self.ROB_head + self.ROB_num):
-            rob_entry_no = i % self.ROB_num
-            print("check ROB entry:", rob_entry_no)
-            if self.ROB[rob_entry_no].idle == True:
-                # only update ROB header when RS is also available
-                # self.ROB_header = (self.ROB_header+1) % self.ROB_num
-                ROB_no = rob_entry_no
-                flag = True
-                break
-
-        print("ROB head index is ", self.ROB_head)
-        if flag == False:
-            return -1
-
-
-        print("inst index is", inst.inst)
-
-        # BEN and BEQ
-        # TODO offset should be added
-        if inst.inst == 3 or inst.inst == 4:
+        elif inst.inst == 3 or inst.inst == 4:
             flag = False
 
             print("RS Integer adder BEQ BNE number is", len(self.RS_Integer_Adder))
