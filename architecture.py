@@ -926,7 +926,7 @@ class Processor(object):
             if self.ifbranch(self.inst_issue_index)==True:# determine if it is a branch instruction#############################
                 if self.BTB[self.inst_issue_index].issue_enable==True:########## prevent further redundant issue ###########
                     if self.issue_one_inst(self.inst_list[self.inst_issue_index]) == 0:
-                        self.inst_ID_last = self.inst_ID_last - 1 ###############making the issued ID and parsed ID consistant
+                        # self.inst_ID_last = self.inst_ID_last - 1 ###############making the issued ID and parsed ID consistant
                         print("Issue Inst", self.inst_issue_index, self.inst_list[self.inst_issue_index].str, "succeed")
                 else:
                     print("wait for the new BTB entry to be ready after EXE")
@@ -935,7 +935,7 @@ class Processor(object):
                     self.BTB_add_entry(self.inst_issue_index,self.inst_list[self.inst_issue_index].offset)# add entry#############################
                 else:
                     self.BTB_lookup(self.inst_issue_index) ##################determine the next instruction##################################
-                    self.inst_ID_last = self.inst_ID_last + 1 ###############making the issued ID and parsed ID consistant
+                    # self.inst_ID_last = self.inst_ID_last + 1 ###############making the issued ID and parsed ID consistant
                 #print("BTB_next_pc=",self.BTB[self.inst_issue_index].next_PC, "next_Instruction=",self.inst_issue_index, "next_issued_instr=",self.inst_ID_last)
 
             else:
@@ -1433,7 +1433,7 @@ class Processor(object):
 
         # Add a new line for final output instruction table
         # record Issue cycle
-        self.instruction_final_table.append([self.cycle, -1, -1, -1, -1])
+        self.instruction_final_table.append([self.cycle, -1, -1, -1, -1,inst.str])
         print("final table is", self.instruction_final_table)
 
         # print("ROB[0]:", self.ROB[0].idle, self.ROB[0].reg_number, self.ROB[0].reg_value, self.ROB[0].value_ready)

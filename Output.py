@@ -1,31 +1,43 @@
 #from pandas.core.frame import DataFrame
+
+from copy import deepcopy
+
 def output_txt(instruction_final_table, reg_int, reg_float):
 
     inst_set = []
 
-    inst_final_table = [[]]
+    # inst_final_table = [[]]
 
-    with open('testcase1_Instruction.txt', mode='r') as  f1:
-        f11 = f1.readlines()
+    # with open('testcase1_Instruction.txt', mode='r') as  f1:
+    #     f11 = f1.readlines()
 
-    for x in f11:
-        y = x.split('\n')
-        inst_set.append(y[0])
-        print("appending Inst:", y[0])
+    print("length of final table", len(instruction_final_table))
+    f = open("instruction_final_table.txt", "w+")
+    for i in range(len(instruction_final_table)):
 
-    f = open ("instruction_final_table.txt", "w+")
+        # y = x.split('\n')
+        # inst_set.append(y[0])
+        # print("appending Inst:", y[0])
+        #
 
-    for i in range(len(inst_set)):
+
+
+
+
         print("Inst index is", i)
-        inst_final_table.append([inst_set[i], instruction_final_table[i]])
-        print(inst_final_table)
+
+        print(instruction_final_table)
         #f.write("something")
-        temp = instruction_final_table[i].copy()
+        temp = deepcopy(instruction_final_table[i])
         if temp[2] == -1:
             temp[2] = "Null"
             temp[2].strip('"\'')
         # f.write(inst_set[i]+" "+str(instruction_final_table[i])+"\n")
-        f.write(inst_set[i] + " " + str(temp) + "\n")
+        print("attention")
+        print(temp[5] + " " + str(temp[0:5]) + "\n")
+        f.write(temp[5].split('\n')[0] + " " + str(temp[0:5]) + "\n")
+
+
 
     f.write("\n")
     f.write("Reg Integer:\n")
