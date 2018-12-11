@@ -1,5 +1,5 @@
 #from pandas.core.frame import DataFrame
-def output_txt(instruction_final_table, reg_int):
+def output_txt(instruction_final_table, reg_int, reg_float):
 
     inst_set = []
 
@@ -42,6 +42,26 @@ def output_txt(instruction_final_table, reg_int):
     for i in range(16, 32):
         f.write(str(reg_int[i])+"\t")
     f.write("\n")
+
+
+    f.write("\n")
+    f.write("Reg Float:\n")
+    for i in range(0, 16):
+        f.write("F"+str(i)+"\t")
+    f.write("\n")
+    for i in range(0, 16):
+        print(str(reg_float[i])+"\t")
+        # f.write("{:.2f}".format(reg_float[i])+"\t")
+        f.write(str(reg_float[i]) + "\t")
+    f.write("\n\n")
+
+    for i in range(16, 32):
+        f.write("F"+str(i)+"\t")
+    f.write("\n")
+    for i in range(16, 32):
+        f.write(str(reg_float[i])+"\t")
+    f.write("\n")
+
 
     f.close()
 
