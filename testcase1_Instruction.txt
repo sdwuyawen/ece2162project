@@ -1,7 +1,4 @@
-Add R1, R2, R4
-Sub R4, R5, R6
-Add R1, R2, R3
-Addi R7, R7, 1
-Bne R7, R8, -5
-Mul.d F4, F5, F6
-Sub.d F7, F8, F9
+Ld F1, 0(R1)
+Ld F2, 0(R2)
+Add.d F4, F2, F1
+Ld F3, 0(R3)

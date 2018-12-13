@@ -78,6 +78,7 @@ def main():
     # for i in range(64):     # 0-63
        # mem_val.append(0)
     num_ROB, num_CDB = Config.Read_Config(num_ROB, num_CDB, reg_int_val, reg_float_val, mem_val)
+
     # print(reg_float_val)
 
     
@@ -91,7 +92,7 @@ def main():
 
     processor = Processor(num_ROB, -1, reg_int_val, reg_float_val, mem_val, inst_num, inst_list)
 
-    for i in range(0, 50):
+    for i in range(0, 35):
 
         print("------branch issue------")
         print("inst issue ID", processor.inst_ID_last)

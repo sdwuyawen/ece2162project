@@ -107,6 +107,7 @@ class ReservationStation:
     def __init__(self):
         self.index = 0
         self.in_use = False
+        self.instruction_index = -1
         self.instruction_type = -1
         self.instruction_id = -1
         self.dest_addr = -1
@@ -132,6 +133,7 @@ class LSQ:
 
         self.index = 0
         self.in_use = False
+        self.instruction_index = -1
         self.instruction_type = -1
         self.instruction_id = -1
         self.dest_addr = -1
@@ -403,8 +405,12 @@ class LSQ_Adder:
                                     self.wbing_cycle = self.finish_cycle + 1
                                 # Cannot be found in LSQ
                                 else:
+
+                                    print("rs addr for ", rs[i].addr)
+                                    print("mem value for ",processor.MEM[rs[i].addr])
+
                                     rs[i].value = processor.MEM[rs[i].addr]
-                                    rs[i].dest_value = rs[k].value
+                                    rs[i].dest_value = rs[i].value
                                     processor.instruction_final_table[rs[i].instruction_id][2] = self.finish_cycle+ self.config.mem_cycles-1
                                 # rs[i].dest_value = rs[i].src_value[0] - rs[i].src_value[1]
                                     self.wbing_cycle = self.finish_cycle + self.config.mem_cycles
@@ -688,8 +694,6 @@ class CDB:
         #         self.buffer[i][j].dest = -1
         #         self.buffer[i][j].value = -1
 
-
-
     def put_to_buffer(self, rs, active_rs_number, fu_index, cycle):
         print("put_to_buffer")
 
@@ -766,6 +770,7 @@ class CDB:
                 processor.ROB[rob_entry].value_rdy2commit_cycle = current_cycle + 1
 
             print("ROB", rob_entry, "updated to:", processor.ROB[rob_entry].reg_value,
+                  "register number is ",processor.ROB[rob_entry].reg_number,
             processor.ROB[rob_entry].value_ready,
             processor.ROB[rob_entry].value_rdy2commit_cycle)
 
@@ -885,7 +890,7 @@ class Processor(object):
         self.config = ProcessorConfig()
         self.config.read_config()
         self.config.print_config()
-
+        print("mem is",self.MEM)
         # for j in range(self.config.ldst.rs_number):
             # LSQ_list =
         self.RS_LSQ = [[LSQ() for i in range(self.config.ldst.rs_number)] for i in range(self.config.ldst.fu_number)]
@@ -1227,9 +1232,14 @@ class Processor(object):
                         self.inst_ID_last = self.inst_ID_last + 1
 
                         # 2.1 Update ROB
-                        # self.ROB[rob_entry_no].reg_number = inst.dest
+                        if inst.inst == 1:
+                            self.ROB[rob_entry_no].reg_number = inst.F+32
+
+
+
                         self.ROB[rob_entry_no].idle = False
                         self.ROB[rob_entry_no].instruction_index = inst.index
+                        self.ROB[rob_entry_no].instruction_ID = inst.ID
 
                         # 2.2 Update RAT
                         # RAT with dest 0-63 points to ARF
@@ -1239,8 +1249,11 @@ class Processor(object):
                         # 2.3 Update RS
                         self.RS_LSQ[j][i].in_use = True
                         self.RS_LSQ[j][i].instruction_type = inst.inst
-                        self.RS_LSQ[j][i].dest_addr = ROB_no + 64
-                        self.RS_LSQ[j][i].dest_value = -1
+                        if inst.inst == 1:
+
+                            self.RS_LSQ[j][i].dest_addr = ROB_no + 64
+                            self.RS_LSQ[j][i].dest_value = -1
+
                         self.RS_LSQ[j][i].offset = inst.offset
                         self.RS_LSQ[j][i].instruction_index = inst.index
                         self.RS_LSQ[j][i].instruction_id = inst.ID
@@ -1277,6 +1290,12 @@ class Processor(object):
                             self.RS_LSQ[j][i].src_value = [-1, -1]
 
                         self.RS_LSQ[j][i].rdy2exe_cycle = self.cycle + 1
+
+                        # 2.2 Update RAT
+                        # RAT with dest 0-63 points to ARF
+                        # RAT with dest >= 64 ... points to ROB
+                        if inst.inst == 1:
+                            self.RAT[inst.F + 32] = 64 + ROB_no
 
                         flag = True
                         self.INDEX_LSQ = j + 1
