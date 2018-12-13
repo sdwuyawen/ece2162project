@@ -320,6 +320,7 @@ class LSQ_Adder:
         self.busy = False
         # self.wbing_value = -1
         self.wbing_cycle = -1
+        self.sd_commit_cycle = -1
         self.active_rs_num = -1
         self.start_cycle = -1
         self.finish_cycle = -1
@@ -345,7 +346,7 @@ class LSQ_Adder:
         if operation == EXEC:
             print("--------------",self.fu_index,"LSQ Adder EXEC Begin:-------------------")
             if self.busy == False:
-                print(" Adder got:")
+                print("ld Adder got:")
                 # for i in range(len(self.config.rs_number)):
                 # for i, rs in enumerate(rs):
                 # Find an entry in my RS that all dependencies are ready for Execution
@@ -354,7 +355,7 @@ class LSQ_Adder:
                 # rs.sort(key=lambda rs_entry:rs_entry.instruction_id)
                 # for i in range(len(rs)):
                     i = k % len(rs)
-                    print("rs[",i, "] is in use",rs[i].in_use)
+                    print("sd rs[",i, "] is in use",rs[i].dest_addr)
 
                     if rs[i].in_use == True and rs[i].instruction_id != -1:
                         print("rs[", i, "] src_ready is", rs[i].src_ready)
@@ -396,9 +397,10 @@ class LSQ_Adder:
                                 for k in range(len(rs)):
                                     if rs[k].addr == rs[i].addr and i!=k:
                                         flag = True
+                                        break
 
                                 # The value can be found in LSQ
-                                if flag == True and rs[i].instruction_type == 2:
+                                if flag == True and rs[k].instruction_type == 2:
                                     rs[i].value = rs[k].value
                                     rs[i].dest_value = rs[k].value
                                     processor.instruction_final_table[rs[i].instruction_id][2]=self.finish_cycle
@@ -418,11 +420,14 @@ class LSQ_Adder:
                             elif rs[i].instruction_type == 2:
 
                                 rs[i].value = rs[i].src_value[0]
-
+                                # rs[i].addr =
+                                print("sd in rs[", i, "] addr ", rs[i].addr)
                                 processor.MEM[rs[i].addr] = rs[i].value
 
+
+
                                 # rs[i].dest_value = rs[i].src_value[0] + rs[i].src_value[1]
-                                self.wbing_cycle = self.finish_cycle+self.config.mem_cycles
+                                self.sd_commit_cycle = current_cycle
                             # if rs[i].instruction_type == 4 or rs[i].instruction_type == 3:
                             #     rs[i].clear()
                             #     self.wbing_cycle = 0
@@ -458,6 +463,28 @@ class LSQ_Adder:
             print("\n-------------",self.fu_index,"LSQ Adder WB Begin:----------------")
             if self.busy == True:
                 print(" Adder.busy:")
+
+                if self.sd_commit_cycle == current_cycle:
+                    self.active_rs_num = self.active_rs_num_queue[0]
+                    self.active_rs_num_queue.pop(0)
+                    self.busy = False
+                    # release current RS entry after the WB task has been dropped to CDB
+                    # self.rs[self.active_rs_num].in_use = False
+                    print("sd fu index is ", self.fu_index, "active rs number is ", self.active_rs_num)
+
+                    print("sd rs[", self.active_rs_num, "] released")
+                    # self.active_rs_num = -1
+
+                    print("sd rob num", rs[self.active_rs_num].dest_addr, "] released")
+
+                    processor.ROB[rs[self.active_rs_num].dest_addr-64].value_ready = True
+                    processor.ROB[rs[self.active_rs_num].dest_addr-64].value_rdy2commit_cycle = current_cycle + 1
+                    processor.ROB[rs[self.active_rs_num].dest_addr-64].if_sd = True
+                    processor.ROB[rs[self.active_rs_num].dest_addr-64].sd_fu_index = self.fu_index
+                    processor.ROB[rs[self.active_rs_num].dest_addr - 64].sd_rs_index = self.active_rs_num
+
+
+
                 if self.wbing_cycle == current_cycle:
                     print("     WB cycle:", current_cycle)
                     self.active_rs_num=self.active_rs_num_queue[0]
@@ -470,7 +497,7 @@ class LSQ_Adder:
                         # self.rs[self.active_rs_num].in_use = False
                         print("fu index is ", self.fu_index,"active rs number is ",self.active_rs_num)
                         rs[self.active_rs_num].clear()
-                        print("rs[", self.active_rs_num, "] released")
+                        print("ld rs[", self.active_rs_num, "] released")
                         self.active_rs_num = -1
                     else:
                         print("Drop to CDB failed. FU is kept busy")
@@ -836,6 +863,10 @@ class ROB:
         self.value_rdy2commit_cycle = -1
         self.instruction_index = -1
         self.instruction_ID = -1
+        self.if_sd = False
+        self.if_sd_counter = 0
+        self.sd_fu_index = -1
+        self.sd_rs_index = -1
         self.pointer = -1
 
     def clear(self):
@@ -1016,6 +1047,34 @@ class Processor(object):
     #     self.Integer_Adder.operation(self.cycle, EXEC, self)
 
     def issue(self):
+        print("\ninst list not empty")
+        if self.inst_issue_index <= self.inst_num - 1:
+            print("current Inst type=", self.inst_list[self.inst_issue_index].inst)
+            print("current parsed instruction=", self.inst_issue_index, "current Issued Instruction=",
+                  self.inst_ID_last)
+            if self.ifbranch(
+                    self.inst_issue_index) == True:  # determine if it is a branch instruction#############################
+                # rollback_Buffer()
+                if self.BTB[
+                    self.inst_issue_index].empty == True:  # find out if BTB entry is empty##################################################
+                    self.BTB_add_entry(self.inst_issue_index, self.inst_list[
+                        self.inst_issue_index].offset)  # add entry#############################
+                if self.issue_one_inst(self.inst_list[self.inst_issue_index]) == 0:
+                    self.BTB_lookup(
+                        self.inst_issue_index)  ##################determine the next instruction##################################
+                    print("Issue Inst", self.inst_issue_index, self.inst_list[self.inst_issue_index].str, "succeed")
+                else:
+                    print("wait for the new BTB entry to be ready after EXE")
+                    # self.inst_ID_last = self.inst_ID_last + 1 ###############making the issued ID and parsed ID consistant
+                    # print("BTB_next_pc=",self.BTB[self.inst_issue_index].next_PC, "next_Instruction=",self.inst_issue_index, "next_issued_instr=",self.inst_ID_last)
+            else:
+                if self.issue_one_inst(self.inst_list[self.inst_issue_index]) == 0:
+                    print("Issue Inst", self.inst_issue_index, self.inst_list[self.inst_issue_index].str, "succeed")
+                    self.inst_issue_index += 1  # need stall function  solved
+                else:
+                    print("Issue Inst", self.inst_issue_index, "failed")
+
+    def issue_1(self):
         print("\ninst list not empty")
         if self.inst_issue_index <= self.inst_num - 1:
             print("current Inst type=", self.inst_list[self.inst_issue_index].inst)
@@ -1249,10 +1308,13 @@ class Processor(object):
                         # 2.3 Update RS
                         self.RS_LSQ[j][i].in_use = True
                         self.RS_LSQ[j][i].instruction_type = inst.inst
-                        if inst.inst == 1:
 
-                            self.RS_LSQ[j][i].dest_addr = ROB_no + 64
-                            self.RS_LSQ[j][i].dest_value = -1
+                        # if inst.inst == 1:
+
+                        self.RS_LSQ[j][i].dest_addr = ROB_no + 64
+                        self.RS_LSQ[j][i].dest_value = -1
+
+                        print("load store", self.RS_LSQ[j][i].dest_addr)
 
                         self.RS_LSQ[j][i].offset = inst.offset
                         self.RS_LSQ[j][i].instruction_index = inst.index
@@ -1737,22 +1799,49 @@ class Processor(object):
         print("-------------Commit begin:----------------")
         # TODO: when commit, if the RAT entry does not point to this ROB entry, abandon this register value in ROB, and do not update ARF
         rob_H = self.ROB[self.ROB_tail]  # ROB header entry
+
         if rob_H.value_ready == True and self.cycle>=self.ROB[self.ROB_tail].value_rdy2commit_cycle:  # ready to commit
 
-            # Add current cycle as the wb cycle of corresponding instruction
-            self.instruction_final_table[rob_H.instruction_ID][4] = self.cycle
-            self.RAT[rob_H.reg_number] = rob_H.reg_number  # update RAT to the latest ARF ID
-            print("commit index is ", rob_H.reg_number, "value is",self.RAT[rob_H.reg_number])
-            if rob_H.reg_number > 31:
-                self.ARF.reg_float[rob_H.reg_number % 32] = rob_H.reg_value  # update ARF to the latest value in ROB
+            if rob_H.if_sd == True and rob_H.if_sd_counter < self.config.ldst.mem_cycles:
+                rob_H.if_sd_counter+=1
+
+            elif rob_H.if_sd == True and rob_H.if_sd_counter ==self.config.ldst.mem_cycles+1:
+                rob_H.if_sd = False
+                rob_H.if_sd_counter = 0
+
+                self.instruction_final_table[rob_H.instruction_ID][4] = self.cycle
+                self.RAT[rob_H.reg_number] = rob_H.reg_number  # update RAT to the latest ARF ID
+                print("sd commit index is ", rob_H.reg_number, "value is", self.RAT[rob_H.reg_number])
+                if rob_H.reg_number > 31:
+                    self.ARF.reg_float[rob_H.reg_number % 32] = rob_H.reg_value  # update ARF to the latest value in ROB
+                else:
+                    print("sd for int num", rob_H.reg_number, rob_H.reg_value)
+                    self.ARF.reg_int[rob_H.reg_number % 32] = rob_H.reg_value  # update ARF to the latest value in ROB
+                self.ROB[self.ROB_tail].clear()  # remove current ROB head entry
+
+                self.ROB[self.ROB_tail].pointer = rob_H.reg_number
+
+                self.ROB_tail = (self.ROB_tail + 1) % 64  # update ROB header to the next one
+
+                rs = self.RS_LSQ[rob_H.sd_fu_index][rob_H.sd_rs_index]
+                rs.clear()
+
+
             else:
-                print("for int num",rob_H.reg_number, rob_H.reg_value)
-                self.ARF.reg_int[rob_H.reg_number % 32] = rob_H.reg_value  # update ARF to the latest value in ROB
-            self.ROB[self.ROB_tail].clear()  # remove current ROB head entry
+                # Add current cycle as the wb cycle of corresponding instruction
+                self.instruction_final_table[rob_H.instruction_ID][4] = self.cycle
+                self.RAT[rob_H.reg_number] = rob_H.reg_number  # update RAT to the latest ARF ID
+                print("commit index is ", rob_H.reg_number, "value is",self.RAT[rob_H.reg_number])
+                if rob_H.reg_number > 31:
+                    self.ARF.reg_float[rob_H.reg_number % 32] = rob_H.reg_value  # update ARF to the latest value in ROB
+                else:
+                    print("for int num",rob_H.reg_number, rob_H.reg_value)
+                    self.ARF.reg_int[rob_H.reg_number % 32] = rob_H.reg_value  # update ARF to the latest value in ROB
+                self.ROB[self.ROB_tail].clear()  # remove current ROB head entry
 
-            self.ROB[self.ROB_tail].pointer = rob_H.reg_number
+                self.ROB[self.ROB_tail].pointer = rob_H.reg_number
 
-            self.ROB_tail = (self.ROB_tail + 1) % 64  # update ROB header to the next one
+                self.ROB_tail = (self.ROB_tail + 1) % 64  # update ROB header to the next one
 
         print(self.ROB_tail)
         print("-------------Commit end:----------------")
