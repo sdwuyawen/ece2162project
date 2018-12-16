@@ -320,10 +320,13 @@ class LSQ_Adder:
         self.busy = False
         # self.wbing_value = -1
         self.wbing_cycle = -1
+        self.wbing_queue=list()
         self.sd_commit_cycle = -1
         self.active_rs_num = -1
         self.start_cycle = -1
         self.finish_cycle = -1
+        self.exe_stop_cycle = -1
+        self.exe_stop_queue = list()
         self.fu_index = FU_index # to indicate the ID of this FU. For CDB use
         self.rs = rs
         self.tail = 0
@@ -345,11 +348,20 @@ class LSQ_Adder:
         # print("processor cycle: ", current_cycle)
         if operation == EXEC:
             print("--------------",self.fu_index,"LSQ Adder EXEC Begin:-------------------")
+
+
+            # if len(self.exe_stop_queue)> 0 and current_cycle == self.exe_stop_queue[0]:
+            if current_cycle == self.exe_stop_cycle:
+                print("exe stop cycle")
+                self.busy = False
+                # self.exe_stop_queue.pop(0)
             if self.busy == False:
                 print("ld Adder got:")
                 # for i in range(len(self.config.rs_number)):
                 # for i, rs in enumerate(rs):
                 # Find an entry in my RS that all dependencies are ready for Execution
+
+
 
                 for k in range(self.tail, self.tail+len(rs)):
                 # rs.sort(key=lambda rs_entry:rs_entry.instruction_id)
@@ -404,7 +416,11 @@ class LSQ_Adder:
                                     rs[i].value = rs[k].value
                                     rs[i].dest_value = rs[k].value
                                     processor.instruction_final_table[rs[i].instruction_id][2]=self.finish_cycle
+
+                                    self.exe_stop_cycle = self.finish_cycle+1
+
                                     self.wbing_cycle = self.finish_cycle + 1
+
                                 # Cannot be found in LSQ
                                 else:
 
@@ -414,8 +430,12 @@ class LSQ_Adder:
                                     rs[i].value = processor.MEM[rs[i].addr]
                                     rs[i].dest_value = rs[i].value
                                     processor.instruction_final_table[rs[i].instruction_id][2] = self.finish_cycle+ self.config.mem_cycles-1
+
+                                    self.exe_stop_cycle = self.finish_cycle+1
                                 # rs[i].dest_value = rs[i].src_value[0] - rs[i].src_value[1]
                                     self.wbing_cycle = self.finish_cycle + self.config.mem_cycles
+                                self.wbing_queue.append(self.wbing_cycle)
+                                self.exe_stop_queue.append(self.exe_stop_cycle)
                             # Sd
                             elif rs[i].instruction_type == 2:
 
@@ -432,7 +452,7 @@ class LSQ_Adder:
                             #     rs[i].clear()
                             #     self.wbing_cycle = 0
                                 # processor.BTB[rs[i].instruction_index % 8].issue_enable = True
-
+                            # self.busy = False
                             print("start cycle:", self.start_cycle)
                             print("finish cycle:", self.finish_cycle)
 
@@ -461,13 +481,14 @@ class LSQ_Adder:
             # The memory address is calculated in Ex stage. When R1 is ready to the LSQ, it broadcasts to all LSQ entry (Load) pending the memory address R2+0.
             # When R2 is ready, the memory address is calculated, and it broadcasts to all LSQ entry (Load) pending the memory address R2+0
             print("\n-------------",self.fu_index,"LSQ Adder WB Begin:----------------")
-            if self.busy == True:
+            # if self.busy == True:
+            if True:
                 print(" Adder.busy:")
 
                 if self.sd_commit_cycle == current_cycle:
                     self.active_rs_num = self.active_rs_num_queue[0]
                     self.active_rs_num_queue.pop(0)
-                    self.busy = False
+                    # self.busy = False
                     # release current RS entry after the WB task has been dropped to CDB
                     # self.rs[self.active_rs_num].in_use = False
                     print("sd fu index is ", self.fu_index, "active rs number is ", self.active_rs_num)
@@ -484,23 +505,24 @@ class LSQ_Adder:
                     processor.ROB[rs[self.active_rs_num].dest_addr - 64].sd_rs_index = self.active_rs_num
 
 
-
-                if self.wbing_cycle == current_cycle:
-                    print("     WB cycle:", current_cycle)
-                    self.active_rs_num=self.active_rs_num_queue[0]
-                    print("     active num:", self.active_rs_num)
-                    # Successfully drop it to CDB
-                    if processor.CDB.put_to_buffer(rs, self.active_rs_num, self.fu_index, current_cycle) == True:
-                        self.active_rs_num_queue.pop(0)
-                        self.busy = False
-                        # release current RS entry after the WB task has been dropped to CDB
-                        # self.rs[self.active_rs_num].in_use = False
-                        print("fu index is ", self.fu_index,"active rs number is ",self.active_rs_num)
-                        rs[self.active_rs_num].clear()
-                        print("ld rs[", self.active_rs_num, "] released")
-                        self.active_rs_num = -1
-                    else:
-                        print("Drop to CDB failed. FU is kept busy")
+                if len(self.wbing_queue) > 0:
+                    if self.wbing_queue[0] == current_cycle:
+                        print("     WB cycle:", current_cycle)
+                        self.active_rs_num=self.active_rs_num_queue[0]
+                        print("     active num:", self.active_rs_num)
+                        # Successfully drop it to CDB
+                        if processor.CDB.put_to_buffer(rs, self.active_rs_num, self.fu_index, current_cycle) == True:
+                            self.wbing_queue.pop(0)
+                            self.active_rs_num_queue.pop(0)
+                            self.busy = False
+                            # release current RS entry after the WB task has been dropped to CDB
+                            # self.rs[self.active_rs_num].in_use = False
+                            print("fu index is ", self.fu_index,"active rs number is ",self.active_rs_num)
+                            rs[self.active_rs_num].clear()
+                            print("ld rs[", self.active_rs_num, "] released")
+                            self.active_rs_num = -1
+                        else:
+                            print("Drop to CDB failed. FU is kept busy")
             print("-------------",self.fu_index,"LSQ Adder WB End:----------------\n")
 
 class Queue:
