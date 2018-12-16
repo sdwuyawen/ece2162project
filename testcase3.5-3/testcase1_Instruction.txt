@@ -1,0 +1,8 @@
+Sd F1, 0(R4)
+Sd F2, 0(R5)
+Add.d F2, F2, F2
+Ld F3, 0(R6)
+Addi R1, R1, 1
+BNE R1, R2, -6
+Ld F7, 0(R8)
+Add.d F3, F3, F7

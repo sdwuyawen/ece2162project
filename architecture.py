@@ -514,6 +514,13 @@ class Queue:
             return True
         return False
 
+    def addbottom(self,dataval):
+    # Insert method to add element
+        if dataval not in self.queue:
+            self.queue.append(dataval)
+            return True
+        return False
+
     # Pop method to remove element
     def removefromq(self):
         if len(self.queue)>0:
@@ -618,11 +625,12 @@ class PipelinedFU:
                             elif self.function == 2:        # Multiply
                                 rs[i].dest_value = rs[i].src_value[0] * rs[i].src_value[1]
                             pipelineinfo.wbing_cycle = pipelineinfo.finish_cycle
+                            print("FU EXE wbing cycle is", pipelineinfo.wbing_cycle)
                             print("start cycle:", pipelineinfo.start_cycle)
                             print("finish cycle:", pipelineinfo.finish_cycle)
 
                             # ENQUEUE
-                            self.exeQueue.addtoq(pipelineinfo)
+                            self.exeQueue.addbottom(pipelineinfo)
                             print("Operate self.exeQueue.currentsize()", self.exeQueue.currentsize())
                             break
 
@@ -652,8 +660,9 @@ class PipelinedFU:
             print("\n-------------",self.fu_index,"Pipielined FU WB Begin:----------------")
             print("WB self.exeQueue.currentsize()", self.exeQueue.currentsize())
             if self.exeQueue.currentsize() > 0:
+                print ("FU wbing cyle is ", self.exeQueue.queryfirstelement().wbing_cycle)
                 if self.exeQueue.queryfirstelement().wbing_cycle == current_cycle:
-                    print("     WB cycle:", current_cycle)
+                    print("     FU WB cycle:", current_cycle)
 
 
 
@@ -1052,17 +1061,13 @@ class Processor(object):
             print("current Inst type=", self.inst_list[self.inst_issue_index].inst)
             print("current parsed instruction=", self.inst_issue_index, "current Issued Instruction=",
                   self.inst_ID_last)
-            if self.ifbranch(
-                    self.inst_issue_index) == True:  # determine if it is a branch instruction#############################
+            if self.ifbranch(self.inst_issue_index) == True:  # determine if it is a branch instruction#############################
                 # rollback_Buffer()
-                if self.BTB[
-                    self.inst_issue_index].empty == True:  # find out if BTB entry is empty##################################################
-                    self.BTB_add_entry(self.inst_issue_index, self.inst_list[
-                        self.inst_issue_index].offset)  # add entry#############################
+                if self.BTB[self.inst_issue_index].empty == True:  # find out if BTB entry is empty##################################################
+                    self.BTB_add_entry(self.inst_issue_index, self.inst_list[self.inst_issue_index].offset)  # add entry#############################
                 if self.issue_one_inst(self.inst_list[self.inst_issue_index]) == 0:
-                    self.BTB_lookup(
-                        self.inst_issue_index)  ##################determine the next instruction##################################
-                    print("Issue Inst", self.inst_issue_index, self.inst_list[self.inst_issue_index].str, "succeed")
+                    self.BTB_lookup(self.inst_issue_index)  ##################determine the next instruction##################################
+                    # print("Issue Inst", self.inst_issue_index, self.inst_list[self.inst_issue_index].str, "succeed")
                 else:
                     print("wait for the new BTB entry to be ready after EXE")
                     # self.inst_ID_last = self.inst_ID_last + 1 ###############making the issued ID and parsed ID consistant

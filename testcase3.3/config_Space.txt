@@ -1,0 +1,4 @@
+ROB entries = 128
+CDB buffer entries = 1
+R4 = 20, R5 = 21, R6 = 21, R8 = 20, F1 = 11.11, F2 = 22.22
+Mem[20] = 2, Mem[21] = 3.2

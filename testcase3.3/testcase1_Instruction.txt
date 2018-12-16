@@ -1,0 +1,5 @@
+Sd F1, 0(R4)
+Sd F2, 0(R5)
+Ld F3, 0(R6)
+Ld F7, 0(R8)
+Add.d F3, F3, F7

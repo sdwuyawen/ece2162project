@@ -38,7 +38,7 @@ def output_txt(instruction_final_table, reg_int, reg_float, mem):
         # f.write(inst_set[i]+" "+str(instruction_final_table[i])+"\n")
         print("attention")
         print(temp[5] + " " + str(temp[0:5]) + "\n")
-        f.write(temp[5].split('\n')[0] + " " + str(temp[0:5]) + "\n")
+        f.write(temp[5].split('\n')[0] + "\t\t\t" + str(temp[0:5]) + "\n")
 
 
 
