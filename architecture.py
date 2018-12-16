@@ -200,7 +200,7 @@ class Adder:
                     print("rs[",i, "] is in use",rs[i].in_use)
 
                     if rs[i].in_use == True and rs[i].instruction_id != -1:
-                        print("rs[", i, "] src_ready is", rs[i].src_ready)
+
 
                         # for j in [0,1]:
                         #     if rs[i].src_ready[j] == False and rs[i].src_addr[j] > 63:
@@ -216,6 +216,8 @@ class Adder:
 
                         if rs[i].src_ready == [True, True] and current_cycle >= rs[i].rdy2exe_cycle:    # start an addition operation
                             # Add current cycle as the execution cycle of corresponding instruction
+                            print("rs[", i, "] src_ready is", rs[i].src_ready, "instruction id is",
+                                  rs[i].instruction_id)
                             print ("final table", processor.instruction_final_table[rs[i].instruction_id])
                             processor.instruction_final_table[rs[i].instruction_id][1] = current_cycle
                             print("inst index is", rs[i].instruction_index)
@@ -229,7 +231,15 @@ class Adder:
                             self.active_rs_num_queue.append(i)
                             # print("active_rs_num = ", self.active_rs_num)
 
-                            self.tail = i+1
+                            j = (i+1) % len(rs)
+
+                            if rs[j].in_use == True:
+                                if rs[j].instruction_id > rs[0].instruction_id and rs[0].instruction_id >=0:
+                                    self.tail = 0
+                            else:
+                                self.tail = i+1
+
+
 
                             if rs[i].instruction_type == 8 or rs[i].instruction_type == 3 or rs[
                                 i].instruction_type == 4:
@@ -237,6 +247,8 @@ class Adder:
                             else:
                                 rs[i].dest_value = rs[i].src_value[0] + rs[i].src_value[1]
                             self.wbing_cycle = self.finish_cycle
+
+
                             if processor.ifbranch(rs[i].instruction_index) == True:  ##########added for branch operation##############################################
                                 if (rs[i].instruction_type == 3 and rs[i].dest_value == 0) or (
                                         rs[i].instruction_type == 4 and rs[i].dest_value != 0):  ####beq and bne
@@ -1516,12 +1528,12 @@ class Processor(object):
                         self.RS_Integer_Adder[j][i].instruction_id = inst.ID
 
                         src_0 = self.RAT[inst.source_0]
-                        print("src_0 is", src_0)
+                        print("Int ALU src_0 is", src_0)
 
                         if inst.inst == 7:
 
                             src_1 = int(inst.source_1)
-                            print("src_1 is", src_1)
+                            print("Int ALU src_1 is", src_1)
 
                             self.RS_Integer_Adder[j][i].src_addr = [src_0, src_1]
                             self.RS_Integer_Adder[j][i].start_cycle = -1
@@ -1857,13 +1869,15 @@ class Processor(object):
             else:
                 # Add current cycle as the wb cycle of corresponding instruction
                 self.instruction_final_table[rob_H.instruction_ID][4] = self.cycle
-                self.RAT[rob_H.reg_number] = rob_H.reg_number  # update RAT to the latest ARF ID
-                print("commit index is ", rob_H.reg_number, "value is",self.RAT[rob_H.reg_number])
-                if rob_H.reg_number > 31:
-                    self.ARF.reg_float[rob_H.reg_number % 32] = rob_H.reg_value  # update ARF to the latest value in ROB
-                else:
-                    print("for int num",rob_H.reg_number, rob_H.reg_value)
-                    self.ARF.reg_int[rob_H.reg_number % 32] = rob_H.reg_value  # update ARF to the latest value in ROB
+
+                if self.RAT[rob_H.reg_number] == self.ROB_tail+64:
+                    self.RAT[rob_H.reg_number] = rob_H.reg_number  # update RAT to the latest ARF ID
+                    print("commit index is ", rob_H.reg_number, "value is",rob_H.reg_value)
+                    if rob_H.reg_number > 31:
+                        self.ARF.reg_float[rob_H.reg_number % 32] = rob_H.reg_value  # update ARF to the latest value in ROB
+                    else:
+                        print("for int num",rob_H.reg_number, rob_H.reg_value)
+                        self.ARF.reg_int[rob_H.reg_number % 32] = rob_H.reg_value  # update ARF to the latest value in ROB
                 self.ROB[self.ROB_tail].clear()  # remove current ROB head entry
 
                 self.ROB[self.ROB_tail].pointer = rob_H.reg_number
