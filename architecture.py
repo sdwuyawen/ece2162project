@@ -789,7 +789,7 @@ class CDB:
         temp.active_rs_number = active_rs_number
         print("fu index is", fu_index)
         if self.buffer[fu_index].entries.currentsize() < self.buffer[fu_index].maxSize:
-            self.buffer[fu_index].entries.addtoq(temp)
+            self.buffer[fu_index].entries.addbottom(temp)
             print("inst id is",rs[active_rs_number].instruction_id,"fu_index is", fu_index)
             return True
         else:
