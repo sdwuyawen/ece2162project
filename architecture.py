@@ -567,7 +567,7 @@ class Queue:
     # Pop method to remove element
     def removefromq(self):
         if len(self.queue)>0:
-            return self.queue.pop()
+            return self.queue.pop(0)
 
         return ("No elements in Queue!")
 
@@ -1850,12 +1850,12 @@ class Processor(object):
 
         if rob_H.value_ready == True and self.cycle>=self.ROB[self.ROB_tail].value_rdy2commit_cycle:  # ready to commit
 
-            if rob_H.if_sd == True and rob_H.if_sd_counter < self.config.ldst.mem_cycles:
+            if rob_H.if_sd == True and rob_H.if_sd_counter < self.config.ldst.mem_cycles-1:
                 # if rob_H.if_sd_counter == 0:
                 #     self.RS_LSQ[rob_H.sd_fu_index][rob_H.sd_rs_index].clear()
                 rob_H.if_sd_counter+=1
 
-            elif rob_H.if_sd == True and rob_H.if_sd_counter ==self.config.ldst.mem_cycles+1:
+            elif rob_H.if_sd == True and rob_H.if_sd_counter ==self.config.ldst.mem_cycles:
                 rob_H.if_sd = False
                 rob_H.if_sd_counter = 0
 
