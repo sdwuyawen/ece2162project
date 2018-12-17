@@ -461,7 +461,7 @@ class LSQ_Adder:
                                 rs[i].value = rs[i].src_value[0]
                                 # rs[i].addr =
                                 print("sd in rs[", i, "] addr ", rs[i].addr)
-                                processor.MEM[rs[i].addr] = rs[i].value
+                                # processor.MEM[rs[i].addr] = rs[i].value
 
 
 
@@ -506,8 +506,8 @@ class LSQ_Adder:
                 print(" Adder.busy:")
 
                 if self.sd_commit_cycle == current_cycle:
-                    self.active_rs_num = self.active_rs_num_queue[len(self.active_rs_num_queue)-1]
-                    self.active_rs_num_queue.remove(self.active_rs_num)
+                    self.active_rs_num = self.active_rs_num_queue.pop()
+
                     # self.busy = False
                     # release current RS entry after the WB task has been dropped to CDB
                     # self.rs[self.active_rs_num].in_use = False
@@ -521,7 +521,7 @@ class LSQ_Adder:
                     processor.ROB[rs[self.active_rs_num].dest_addr-64].value_ready = True
                     processor.ROB[rs[self.active_rs_num].dest_addr-64].value_rdy2commit_cycle = current_cycle + 1
                     processor.ROB[rs[self.active_rs_num].dest_addr-64].if_sd = True
-                    processor.ROB[rs[self.active_rs_num].dest_addr-64].sd_fu_index = self.fu_index
+                    processor.ROB[rs[self.active_rs_num].dest_addr-64].sd_fu_index = self.fu_index-(processor.config.adder.fu_number+processor.config.fpadder.fu_number+processor.config.fpmul.fu_number)
                     processor.ROB[rs[self.active_rs_num].dest_addr - 64].sd_rs_index = self.active_rs_num
 
 
@@ -968,6 +968,7 @@ class Processor(object):
         # print(self.RAT[0])
         # print(self.RAT.__len__())
         self.MEM = mem_val
+        self.rs_entry_copy = 0
 
         # read processor configuration
         self.config = ProcessorConfig()
@@ -1373,9 +1374,9 @@ class Processor(object):
 
                         src_R = self.RAT[inst.R]
 
-                        if src_R >=64:
-                            if self.ROB[src_R-64].value_ready == True:
-                                src_R = self.ROB[src_R-64].reg_value
+                        # if src_R >=64:
+                        #     if self.ROB[src_R-64].value_ready == True:
+                        #         src_R = self.ROB[src_R-64].reg_number
 
                         print("src_1 is", src_R)
 
@@ -1396,13 +1397,26 @@ class Processor(object):
 
                         # if source 0 is from ARF, source 1 is from ROB
                         if (src_F < 64 and src_R >= 64):
-                            self.RS_LSQ[j][i].src_ready = [True, False]
-                            self.RS_LSQ[j][i].src_value = [self.ARF.reg_float[src_F-32], -1]
+
+                            if self.ROB[src_R - 64].value_ready == True:
+                                src_R = self.ROB[src_R - 64].reg_value
+                                self.RS_LSQ[j][i].src_ready = [True, True]
+                                self.RS_LSQ[j][i].src_value = [self.ARF.reg_float[src_F-32], src_R]
+                            else:
+                                self.RS_LSQ[j][i].src_ready = [True, False]
+                                self.RS_LSQ[j][i].src_value = [self.ARF.reg_float[src_F-32], -1]
 
                         # if both are from ROB
                         if (src_F >= 64 and src_R >= 64):
-                            self.RS_LSQ[j][i].src_ready = [False, False]
-                            self.RS_LSQ[j][i].src_value = [-1, -1]
+
+                            if self.ROB[src_R - 64].value_ready == True:
+                                src_R = self.ROB[src_R - 64].reg_value
+                                self.RS_LSQ[j][i].src_ready = [False, True]
+                                self.RS_LSQ[j][i].src_value = [-1, src_R]
+                            else:
+
+                                self.RS_LSQ[j][i].src_ready = [False, False]
+                                self.RS_LSQ[j][i].src_value = [-1, -1]
 
                         self.RS_LSQ[j][i].rdy2exe_cycle = self.cycle + 1
 
@@ -1543,19 +1557,15 @@ class Processor(object):
 
                         src_0 = self.RAT[inst.source_0]
 
-                        if src_0 >=64:
-                            if self.ROB[src_0-64].value_ready == True:
-                                src_0 = self.ROB[src_0-64].reg_value
+                        # if src_0 >=64:
+                        #     if self.ROB[src_0-64].value_ready == True:
+                        #         src_0 = self.ROB[src_0-64].reg_number
 
                         print("Int ALU src_0 is", src_0)
 
                         if inst.inst == 7:
 
                             src_1 = int(inst.source_1)
-
-                            if src_1 >= 64:
-                                if self.ROB[src_1 - 64].value_ready == True:
-                                    src_1 = self.ROB[src_1 - 64].reg_value
 
                             print("Int ALU src_1 is", src_1)
 
@@ -1570,18 +1580,23 @@ class Processor(object):
                                                                          src_1]
 
                             # if source 0 is from ROB
-                            if (src_0 >= 64 and src_1 < 64):
-                                self.RS_Integer_Adder[j][i].src_ready = [False, True]
-                                self.RS_Integer_Adder[j][i].src_value = [-1, src_1]
+                            if (src_0 >= 64):
+                                if self.ROB[src_0 - 64].value_ready == True:
+                                    src_0 = self.ROB[src_0-64].reg_value
+                                    self.RS_Integer_Adder[j][i].src_ready = [True, True]
+                                    self.RS_Integer_Adder[j][i].src_value = [src_0, src_1]
+                                else:
+                                    self.RS_Integer_Adder[j][i].src_ready = [False, True]
+                                    self.RS_Integer_Adder[j][i].src_value = [-1, src_1]
 
                             self.RS_Integer_Adder[j][i].rdy2exe_cycle = self.cycle + 1
 
                         else:
                             src_1 = self.RAT[inst.source_1]
 
-                            if src_1 >= 64:
-                                if self.ROB[src_1 - 64].value_ready == True:
-                                    src_1 = self.ROB[src_1 - 64].reg_value
+                            # if src_1 >= 64:
+                            #     if self.ROB[src_1 - 64].value_ready == True:
+                            #         src_1 = self.ROB[src_1 - 64].reg_number
 
                             print("src_1 is", src_1)
 
@@ -1660,17 +1675,17 @@ class Processor(object):
 
                         src_0 = self.RAT[inst.source_0+32]
 
-                        if src_0 >= 64:
-                            if self.ROB[src_0 - 64].value_ready == True:
-                                src_0 = self.ROB[src_0 - 64].reg_value
+                        # if src_0 >= 64:
+                        #     if self.ROB[src_0 - 64].value_ready == True:
+                        #         src_0 = self.ROB[src_0 - 64].reg_number
 
                         print("src_0 is", src_0)
 
                         src_1 = self.RAT[inst.source_1+32]
 
-                        if src_1 >= 64:
-                            if self.ROB[src_1 - 64].value_ready == True:
-                                src_1 = self.ROB[src_1 - 64].reg_value
+                        # if src_1 >= 64:
+                        #     if self.ROB[src_1 - 64].value_ready == True:
+                        #         src_1 = self.ROB[src_1 - 64].reg_number
 
                         print("src_1 is", src_1)
 
@@ -1751,17 +1766,17 @@ class Processor(object):
 
                         src_0 = self.RAT[inst.source_0 + 32]
 
-                        if src_0 >= 64:
-                            if self.ROB[src_0 - 64].value_ready == True:
-                                src_0 = self.ROB[src_0 - 64].reg_value
+                        # if src_0 >= 64:
+                        #     if self.ROB[src_0 - 64].value_ready == True:
+                        #         src_0 = self.ROB[src_0 - 64].reg_number
 
                         print("src_0 is", src_0)
 
                         src_1 = self.RAT[inst.source_1 + 32]
 
-                        if src_1 >= 64:
-                            if self.ROB[src_1 - 64].value_ready == True:
-                                src_1 = self.ROB[src_1 - 64].reg_value
+                        # if src_1 >= 64:
+                        #     if self.ROB[src_1 - 64].value_ready == True:
+                        #         src_1 = self.ROB[src_1 - 64].reg_value
 
                         print("src_1 is", src_1)
 
@@ -1891,11 +1906,18 @@ class Processor(object):
         if rob_H.value_ready == True and self.cycle>=self.ROB[self.ROB_tail].value_rdy2commit_cycle:  # ready to commit
 
             if rob_H.if_sd == True and rob_H.if_sd_counter < self.config.ldst.mem_cycles-1:
-                # if rob_H.if_sd_counter == 0:
-                #     self.RS_LSQ[rob_H.sd_fu_index][rob_H.sd_rs_index].clear()
+
+                print("sd fu index is",rob_H.sd_fu_index, "sd rs index is",rob_H.sd_rs_index)
+                if rob_H.if_sd_counter == 0:
+
+
+                    self.MEM[self.RS_LSQ[rob_H.sd_fu_index][rob_H.sd_rs_index].addr] = self.RS_LSQ[rob_H.sd_fu_index][rob_H.sd_rs_index].src_value[0]
+
+                    self.RS_LSQ[rob_H.sd_fu_index][rob_H.sd_rs_index].clear()
+                print("if store",rob_H.if_sd_counter)
                 rob_H.if_sd_counter+=1
 
-            elif rob_H.if_sd == True and rob_H.if_sd_counter ==self.config.ldst.mem_cycles:
+            elif rob_H.if_sd == True and rob_H.if_sd_counter ==self.config.ldst.mem_cycles-1:
                 rob_H.if_sd = False
                 rob_H.if_sd_counter = 0
 
@@ -1913,7 +1935,11 @@ class Processor(object):
 
                 self.ROB_tail = (self.ROB_tail + 1) % 64  # update ROB header to the next one
 
-                self.RS_LSQ[rob_H.sd_fu_index][rob_H.sd_rs_index].clear()
+                # self.MEM[self.RS_LSQ[rob_H.sd_fu_index][rob_H.sd_rs_index].addr] = self.RS_LSQ[rob_H.sd_fu_index][rob_H.sd_rs_index].src_value[0]
+
+                # self.RS_LSQ[rob_H.sd_fu_index][rob_H.sd_rs_index].clear()
+
+
 
 
             else:
