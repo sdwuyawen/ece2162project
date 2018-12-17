@@ -382,7 +382,8 @@ class LSQ_Adder:
                     print("sd rs[",i, "] is in use",rs[i].dest_addr)
 
                     if rs[i].in_use == True and rs[i].instruction_id != -1:
-                        print("rs[", i, "] src_ready is", rs[i].src_ready)
+                        print("rs[", i, "] exe cycle is", rs[i].rdy2exe_cycle)
+                        print("rs[", i, "] src_ready is",rs[i].src_ready[1])
 
                         # for j in [0,1]:
                         #     if rs[i].src_ready[j] == False and rs[i].src_addr[j] > 63:
@@ -396,7 +397,7 @@ class LSQ_Adder:
                                     # elif  addr >= 32 and addr < 64:
                                     #     rs[i].src_value[j] = processor.ARF.reg_float[addr % 32]
 
-                        if rs[i].src_ready == [True, True] and current_cycle >= rs[i].rdy2exe_cycle:    # start an addition operation
+                        if rs[i].src_ready[1] == True and current_cycle >= rs[i].rdy2exe_cycle:    # start an addition operation
                             # Add current cycle as the execution cycle of corresponding instruction
                             # print ("final table", processor.instruction_final_table[rs[i].instruction_id])
                             processor.instruction_final_table[rs[i].instruction_id][1] = current_cycle
@@ -411,7 +412,12 @@ class LSQ_Adder:
                             self.active_rs_num_queue.append(i)
                             # print("active_rs_num = ", self.active_rs_num)
 
-                            self.tail = i+1
+                            # j = (i+1) % len(rs)
+                            # if rs[j].in_use == True:
+                            #     if rs[j].instruction_id > rs[0].instruction_id and rs[0].instruction_id >=0:
+                            #         self.tail = 0
+                            # else:
+                            #     self.tail = i+1
 
                             rs[i].addr=rs[i].src_value[1]+rs[i].offset
                             flag = False
@@ -446,6 +452,7 @@ class LSQ_Adder:
                                     self.exe_stop_cycle = self.finish_cycle+1
                                 # rs[i].dest_value = rs[i].src_value[0] - rs[i].src_value[1]
                                     self.wbing_cycle = self.finish_cycle + self.config.mem_cycles
+
                                 self.wbing_queue.append(self.wbing_cycle)
                                 self.exe_stop_queue.append(self.exe_stop_cycle)
                             # Sd
@@ -455,6 +462,7 @@ class LSQ_Adder:
                                 # rs[i].addr =
                                 print("sd in rs[", i, "] addr ", rs[i].addr)
                                 processor.MEM[rs[i].addr] = rs[i].value
+
 
 
 
@@ -498,8 +506,8 @@ class LSQ_Adder:
                 print(" Adder.busy:")
 
                 if self.sd_commit_cycle == current_cycle:
-                    self.active_rs_num = self.active_rs_num_queue[0]
-                    self.active_rs_num_queue.pop(0)
+                    self.active_rs_num = self.active_rs_num_queue[len(self.active_rs_num_queue)-1]
+                    self.active_rs_num_queue.remove(self.active_rs_num)
                     # self.busy = False
                     # release current RS entry after the WB task has been dropped to CDB
                     # self.rs[self.active_rs_num].in_use = False
@@ -515,6 +523,7 @@ class LSQ_Adder:
                     processor.ROB[rs[self.active_rs_num].dest_addr-64].if_sd = True
                     processor.ROB[rs[self.active_rs_num].dest_addr-64].sd_fu_index = self.fu_index
                     processor.ROB[rs[self.active_rs_num].dest_addr - 64].sd_rs_index = self.active_rs_num
+
 
 
                 if len(self.wbing_queue) > 0:
@@ -1312,7 +1321,7 @@ class Processor(object):
         # TODO offset should be added
         # Ld and Sd
         if inst.inst == 1 or inst.inst == 2:
-
+            flag = False
             print("RS LSQ number is", len(self.RS_LSQ))
 
             for x in range(self.INDEX_LSQ, self.INDEX_LSQ + len(self.RS_LSQ)):
@@ -1842,6 +1851,8 @@ class Processor(object):
         if rob_H.value_ready == True and self.cycle>=self.ROB[self.ROB_tail].value_rdy2commit_cycle:  # ready to commit
 
             if rob_H.if_sd == True and rob_H.if_sd_counter < self.config.ldst.mem_cycles:
+                # if rob_H.if_sd_counter == 0:
+                #     self.RS_LSQ[rob_H.sd_fu_index][rob_H.sd_rs_index].clear()
                 rob_H.if_sd_counter+=1
 
             elif rob_H.if_sd == True and rob_H.if_sd_counter ==self.config.ldst.mem_cycles+1:
@@ -1862,8 +1873,7 @@ class Processor(object):
 
                 self.ROB_tail = (self.ROB_tail + 1) % 64  # update ROB header to the next one
 
-                rs = self.RS_LSQ[rob_H.sd_fu_index][rob_H.sd_rs_index]
-                rs.clear()
+                self.RS_LSQ[rob_H.sd_fu_index][rob_H.sd_rs_index].clear()
 
 
             else:
