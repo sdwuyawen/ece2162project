@@ -1372,6 +1372,11 @@ class Processor(object):
                         print("src_0 is", src_F)
 
                         src_R = self.RAT[inst.R]
+
+                        if src_R >=64:
+                            if self.ROB[src_R-64].value_ready == True:
+                                src_R = self.ROB[src_R-64].reg_value
+
                         print("src_1 is", src_R)
 
                         self.RS_LSQ[j][i].src_addr = [src_F, src_R]
@@ -1537,11 +1542,21 @@ class Processor(object):
                         self.RS_Integer_Adder[j][i].instruction_id = inst.ID
 
                         src_0 = self.RAT[inst.source_0]
+
+                        if src_0 >=64:
+                            if self.ROB[src_0-64].value_ready == True:
+                                src_0 = self.ROB[src_0-64].reg_value
+
                         print("Int ALU src_0 is", src_0)
 
                         if inst.inst == 7:
 
                             src_1 = int(inst.source_1)
+
+                            if src_1 >= 64:
+                                if self.ROB[src_1 - 64].value_ready == True:
+                                    src_1 = self.ROB[src_1 - 64].reg_value
+
                             print("Int ALU src_1 is", src_1)
 
                             self.RS_Integer_Adder[j][i].src_addr = [src_0, src_1]
@@ -1563,6 +1578,11 @@ class Processor(object):
 
                         else:
                             src_1 = self.RAT[inst.source_1]
+
+                            if src_1 >= 64:
+                                if self.ROB[src_1 - 64].value_ready == True:
+                                    src_1 = self.ROB[src_1 - 64].reg_value
+
                             print("src_1 is", src_1)
 
                             self.RS_Integer_Adder[j][i].src_addr = [src_0, src_1]
@@ -1639,9 +1659,19 @@ class Processor(object):
                         self.RS_Float_Adder[j][i].instruction_id = inst.ID
 
                         src_0 = self.RAT[inst.source_0+32]
+
+                        if src_0 >= 64:
+                            if self.ROB[src_0 - 64].value_ready == True:
+                                src_0 = self.ROB[src_0 - 64].reg_value
+
                         print("src_0 is", src_0)
 
                         src_1 = self.RAT[inst.source_1+32]
+
+                        if src_1 >= 64:
+                            if self.ROB[src_1 - 64].value_ready == True:
+                                src_1 = self.ROB[src_1 - 64].reg_value
+
                         print("src_1 is", src_1)
 
                         self.RS_Float_Adder[j][i].src_addr = [src_0, src_1]
@@ -1720,9 +1750,19 @@ class Processor(object):
                         self.RS_Float_Mul[j][i].instruction_id = inst.ID
 
                         src_0 = self.RAT[inst.source_0 + 32]
+
+                        if src_0 >= 64:
+                            if self.ROB[src_0 - 64].value_ready == True:
+                                src_0 = self.ROB[src_0 - 64].reg_value
+
                         print("src_0 is", src_0)
 
                         src_1 = self.RAT[inst.source_1 + 32]
+
+                        if src_1 >= 64:
+                            if self.ROB[src_1 - 64].value_ready == True:
+                                src_1 = self.ROB[src_1 - 64].reg_value
+
                         print("src_1 is", src_1)
 
                         self.RS_Float_Mul[j][i].src_addr = [src_0, src_1]
